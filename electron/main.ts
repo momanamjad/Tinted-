@@ -74,6 +74,35 @@ function registerIpc() {
     await shell.openPath(folderPath);
   });
 
+  ipcMain.handle("folders:list-subdirs", async (_event, parentPath: string) => {
+    try {
+      const entries = await fs.readdir(parentPath, { withFileTypes: true });
+      const subdirs = [];
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const fullPath = path.join(parentPath, entry.name);
+          // Skip hidden/system folders
+          if (entry.name.startsWith(".") || entry.name.startsWith("$")) continue;
+          
+          // Check database for existing customization
+          const customization = db.getFolderCustomization(fullPath);
+          subdirs.push({
+            name: entry.name,
+            path: fullPath,
+            customization: customization ? {
+              color: customization.selectedColor,
+              iconId: customization.selectedIcon,
+              icoPath: customization.icoPath
+            } : null
+          });
+        }
+      }
+      return { success: true, subdirs };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle("icons:history", () => {
     const list = db.getCustomizationHistory();
     return list.map((item: any) => ({

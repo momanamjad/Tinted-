@@ -1,15 +1,114 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/utils/cn";
-import { TINT_PRESETS, isHexColor, normalizeHexColor } from "@/utils/colors";
+import { isHexColor, normalizeHexColor } from "@/utils/colors";
 
 type ColorPickerProps = {
   color: string;
   onChange: (color: string) => void;
 };
 
+// HSL Helper: HEX -> HSL
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const num = parseInt(hex.replace("#", ""), 16) || 0;
+  let r = (num >> 16) & 255;
+  let g = (num >> 8) & 255;
+  let b = num & 255;
+
+  r /= 255;
+  g /= 255;
+  b /= 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return {
+    h: Math.round(h * 360),
+    s: Math.round(s * 100),
+    l: Math.round(l * 100),
+  };
+}
+
+// HSL Helper: HSL -> HEX
+function hslToHex(h: number, s: number, l: number): string {
+  h /= 360;
+  s /= 100;
+  l /= 100;
+
+  let r = l;
+  let g = l;
+  let b = l;
+
+  if (s !== 0) {
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+
+  const toHex = (x: number) => {
+    const hex = Math.round(x * 255).toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  };
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// macOS style 10x5 color presets grid (50 colors)
+const PRESET_CIRCLES = [
+  // Row 1: Salmon, Reds, Soft Corals
+  "#ff5a5a", "#ff7b7b", "#ff9c9c", "#ffbdbd", "#ffdede", "#ff8f5a", "#ffac7b", "#ffc99c", "#ffe6bd", "#fff2de",
+  // Row 2: Yellows, Peach, Warm Golds
+  "#ffa500", "#ffbc42", "#ffd275", "#ffe9a7", "#fff6d9", "#ffd700", "#ffe24a", "#ffec8b", "#fff5c2", "#fffaf0",
+  // Row 3: Greens, Mint, Limes
+  "#22c55e", "#4ade80", "#86efac", "#bbf7d0", "#dcfce7", "#84cc16", "#a3e635", "#c2f170", "#d9f99d", "#f7fee7",
+  // Row 4: Blues, Cyans, Sky
+  "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#eff6ff", "#06b6d4", "#22d3ee", "#67e8f9", "#a5f3fc", "#ecfeff",
+  // Row 5: Purples, Pinks, Magentas
+  "#a855f7", "#c084fc", "#d8b4fe", "#e9d5ff", "#f3e8ff", "#ec4899", "#f472b6", "#f9a8d4", "#fbcfe8", "#fdf2f8"
+];
+
 export function ColorPicker({ color, onChange }: ColorPickerProps) {
   const [hexInput, setHexInput] = useState(color);
   const [inputError, setInputError] = useState(false);
+
+  // Convert current color to HSL values for sliders
+  const { h, s, l } = hexToHsl(color);
+
+  useEffect(() => {
+    setHexInput(color);
+    setInputError(false);
+  }, [color]);
 
   function handleHexChange(value: string) {
     setHexInput(value);
@@ -22,106 +121,26 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
     }
   }
 
+  function handleHslChange(newH: number, newS: number, newL: number) {
+    const hex = hslToHex(newH, newS, newL);
+    setHexInput(hex);
+    setInputError(false);
+    onChange(hex);
+  }
+
   function handlePresetClick(preset: string) {
     setHexInput(preset);
     setInputError(false);
     onChange(preset);
   }
 
-  // Full extended palette – 60 colors
-  const EXTENDED_PALETTE = [
-    // Reds / Pinks
-    "#fca5a5", "#f87171", "#ef4444", "#dc2626", "#b91c1c",
-    "#fda4af", "#fb7185", "#f43f5e", "#e11d48", "#be123c",
-    // Oranges / Yellows
-    "#fdba74", "#fb923c", "#f97316", "#ea580c", "#c2410c",
-    "#fde68a", "#fcd34d", "#fbbf24", "#f59e0b", "#d97706",
-    // Greens
-    "#bbf7d0", "#86efac", "#4ade80", "#22c55e", "#16a34a",
-    "#bef264", "#a3e635", "#84cc16", "#65a30d", "#4d7c0f",
-    // Blues / Cyans
-    "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7",
-    "#a5f3fc", "#67e8f9", "#22d3ee", "#06b6d4", "#0891b2",
-    // Purples / Violets
-    "#ddd6fe", "#c4b5fd", "#a78bfa", "#8b5cf6", "#7c3aed",
-    "#e879f9", "#d946ef", "#c026d3", "#a21caf", "#86198f",
-    // Grays
-    "#f1f5f9", "#cbd5e1", "#94a3b8", "#64748b", "#334155",
-    "#f9fafb", "#e5e7eb", "#9ca3af", "#6b7280", "#374151",
-  ];
-
   return (
-    <div className="space-y-5">
-      {/* Color preview strip */}
-      <div className="relative h-6 w-full rounded-lg overflow-hidden border border-border/40 shadow-inner">
-        <div
-          className="absolute inset-0 transition-all duration-200"
-          style={{ backgroundColor: isHexColor(hexInput) ? hexInput : color }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent pointer-events-none" />
-      </div>
-
-      {/* Full palette grid */}
-      <div>
-        <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">
-          Palette
-        </p>
-        <div className="grid grid-cols-10 gap-[3px]">
-          {EXTENDED_PALETTE.map((c) => (
-            <button
-              key={c}
-              title={c}
-              onClick={() => handlePresetClick(c)}
-              className={cn(
-                "color-swatch relative h-5 w-full rounded-sm",
-                color === c && "selected"
-              )}
-              style={{ backgroundColor: c }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Preset swatches */}
-      <div>
-        <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">
-          Presets
-        </p>
-        <div className="grid grid-cols-6 gap-2">
-          {TINT_PRESETS.map((c) => (
-            <button
-              key={c}
-              title={c}
-              onClick={() => handlePresetClick(c)}
-              className={cn(
-                "color-swatch relative h-8 w-full rounded-lg border border-black/10",
-                color === c && "selected"
-              )}
-              style={{ backgroundColor: c }}
-            >
-              {color === c && (
-                <span className="absolute inset-0 flex items-center justify-center text-white/80 text-[10px] font-bold">
-                  ✓
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* HEX Input */}
-      <div>
-        <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">
-          Hex Color
-        </p>
-        <div className="flex items-center gap-2">
-          {/* Live color preview box */}
-          <div
-            className="h-9 w-9 flex-shrink-0 rounded-lg border border-white/10 shadow-md transition-all duration-200"
-            style={{ backgroundColor: isHexColor(hexInput) ? hexInput : color }}
-          />
+    <div className="space-y-4 pt-1">
+      {/* HEX Input row with Circle Preview */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-1">
           <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono font-semibold text-muted-foreground select-none">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-mono font-bold text-muted-foreground/60 select-none">
               #
             </span>
             <input
@@ -129,22 +148,128 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
               value={hexInput.replace(/^#/, "")}
               onChange={(e) => handleHexChange(`#${e.target.value}`)}
               maxLength={7}
-              placeholder="22c55e"
+              placeholder="D95026"
               spellCheck={false}
               className={cn(
-                "h-9 w-full rounded-lg border bg-background/80 pl-7 pr-3 font-mono text-sm font-medium uppercase outline-none transition-all",
+                "h-9 w-full rounded-lg border bg-background/50 pl-7 pr-3 font-mono text-sm font-bold uppercase outline-none transition-all",
                 inputError
-                  ? "border-destructive/60 focus:ring-1 focus:ring-destructive/30 text-destructive"
-                  : "border-border focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
+                  ? "border-destructive/60 focus:ring-1 focus:ring-destructive/30 text-destructive bg-destructive/5"
+                  : "border-border/60 focus:border-primary/60 focus:ring-2 focus:ring-primary/10"
               )}
             />
           </div>
         </div>
-        {inputError && (
-          <p className="mt-1.5 text-[10px] font-medium text-destructive">
-            Enter a valid hex (e.g. #22c55e)
-          </p>
-        )}
+
+        {/* Circular previews (history/shades) */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div
+            className="h-[26px] w-[26px] rounded-full border border-black/20 shadow-md ring-2 ring-primary/40 transition-transform duration-200 hover:scale-110"
+            style={{ backgroundColor: color }}
+            title="Selected Color"
+          />
+          <div
+            className="h-[22px] w-[22px] rounded-full border border-black/10 shadow-sm cursor-pointer transition-transform duration-200 hover:scale-110"
+            style={{ backgroundColor: hslToHex(h, s, Math.max(10, l - 12)) }}
+            onClick={() => handlePresetClick(hslToHex(h, s, Math.max(10, l - 12)))}
+            title="Darker Shade"
+          />
+          <div
+            className="h-[22px] w-[22px] rounded-full border border-black/10 shadow-sm cursor-pointer transition-transform duration-200 hover:scale-110"
+            style={{ backgroundColor: hslToHex(h, s, Math.min(95, l + 12)) }}
+            onClick={() => handlePresetClick(hslToHex(h, s, Math.min(95, l + 12)))}
+            title="Lighter Shade"
+          />
+        </div>
+      </div>
+
+      {/* ── HSL SLIDERS ── */}
+      <div className="space-y-3.5 py-1">
+        {/* Hue Slider */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground/60">
+            <span>Hue</span>
+            <span className="tabular-nums">{h}°</span>
+          </div>
+          <div className="relative flex items-center">
+            <input
+              type="range"
+              min="0"
+              max="360"
+              value={h}
+              onChange={(e) => handleHslChange(Number(e.target.value), s, l)}
+              className="h-2.5 w-full cursor-pointer appearance-none rounded-lg focus:outline-none"
+              style={{
+                background: "linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)"
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Saturation Slider */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground/60">
+            <span>Saturation</span>
+            <span className="tabular-nums">{s}%</span>
+          </div>
+          <div className="relative flex items-center">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={s}
+              onChange={(e) => handleHslChange(h, Number(e.target.value), l)}
+              className="h-2.5 w-full cursor-pointer appearance-none rounded-lg focus:outline-none"
+              style={{
+                background: `linear-gradient(to right, ${hslToHex(h, 0, l)} 0%, ${hslToHex(h, 100, l)} 100%)`
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Brightness Slider */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground/60">
+            <span>Brightness</span>
+            <span className="tabular-nums">{l}%</span>
+          </div>
+          <div className="relative flex items-center">
+            <input
+              type="range"
+              min="5"
+              max="95"
+              value={l}
+              onChange={(e) => handleHslChange(h, s, Number(e.target.value))}
+              className="h-2.5 w-full cursor-pointer appearance-none rounded-lg focus:outline-none"
+              style={{
+                background: `linear-gradient(to right, #000000 0%, ${hslToHex(h, s, 50)} 50%, #ffffff 100%)`
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── PRESETS 10x5 GRID ── */}
+      <div>
+        <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">
+          Presets
+        </p>
+        <div className="grid grid-cols-10 gap-1.5">
+          {PRESET_CIRCLES.map((c) => {
+            const isSelected = color.toLowerCase() === c.toLowerCase();
+            return (
+              <button
+                key={c}
+                title={c}
+                onClick={() => handlePresetClick(c)}
+                className={cn(
+                  "h-[18px] w-[18px] rounded-full border border-black/15 shadow-sm transition-transform hover:scale-125 focus:outline-none",
+                  isSelected && "ring-2 ring-white/70 scale-110 shadow-md"
+                )}
+                style={{ backgroundColor: c }}
+              />
+            );
+          })}
+        </div>
       </div>
     </div>
   );

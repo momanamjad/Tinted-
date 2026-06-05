@@ -1,9 +1,17 @@
 import { useState, useEffect } from "react";
-import { Clock, FolderOpen, Grid3x3, PanelLeftClose, PanelLeftOpen, Settings, Sparkles, Loader2 } from "lucide-react";
+import {
+  Clock,
+  FolderOpen,
+  Settings,
+  Sparkles,
+  Loader2,
+  Home,
+  RotateCcw,
+  Play,
+  ArrowLeft,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sidebar, type ActiveTab } from "@/components/dashboard/Sidebar";
 import { FoldersTab } from "@/components/dashboard/FoldersTab";
-import { LibraryTab } from "@/components/dashboard/LibraryTab";
 import { RecentTab } from "@/components/dashboard/RecentTab";
 import { SettingsTab } from "@/components/dashboard/SettingsTab";
 import { RightPanel } from "@/components/dashboard/RightPanel";
@@ -13,37 +21,13 @@ import { useTintdSettings } from "@/hooks/useTintdSettings";
 import { drawFolderIconToCanvas } from "@/utils/iconCanvas";
 import { ALL_ICONS } from "@/data/icons";
 import { matchIconToFolderName, suggestComplementaryColor } from "@/utils/iconMatcher";
+import { cn } from "@/utils/cn";
 
-const TAB_META: Record<
-  ActiveTab,
-  { label: string; description: string; icon: React.ComponentType<{ className?: string }> }
-> = {
-  folders: {
-    label: "Folders",
-    description: "Add and manage your customized folders",
-    icon: FolderOpen,
-  },
-  library: {
-    label: "Icon Library",
-    description: "Browse and select from hundreds of icons",
-    icon: Grid3x3,
-  },
-  recent: {
-    label: "Recent Activity",
-    description: "View your icon customization history",
-    icon: Clock,
-  },
-  settings: {
-    label: "Settings",
-    description: "Preferences, watchers, and data management",
-    icon: Settings,
-  },
-};
+export type ActiveTab = "folders" | "recent" | "settings";
 
 export function MainContent() {
   const { settings, updateSetting } = useTintdSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("folders");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedColor, setSelectedColor] = useState(settings.lastColor);
   const [selectedIconId, setSelectedIconId] = useState("folder");
   const [selectedFolderPath, setSelectedFolderPath] = useState("");
@@ -59,8 +43,129 @@ export function MainContent() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "error"; iconId?: string } | null>(null);
   const [isBgStyling, setIsBgStyling] = useState(false);
 
+  // Parent Workspace Navigation States
+  const [parentPath, setParentPath] = useState<string>("");
+  const [subdirs, setSubdirs] = useState<any[]>([]);
+
   const triggerRefresh = () => setHistoryVersion((v) => v + 1);
 
+  // Sync subdirectories list when history or operations occur
+  useEffect(() => {
+    if (parentPath) {
+      loadSubdirs(parentPath);
+    }
+  }, [historyVersion, parentPath]);
+
+  async function loadSubdirs(pathStr: string) {
+    if (!window.tintd?.ipcRenderer) return;
+    try {
+      const res = await window.tintd.ipcRenderer.invoke("folders:list-subdirs", pathStr);
+      if (res.success) {
+        setSubdirs(res.subdirs);
+      } else {
+        console.error("Failed to list subdirectories:", res.error);
+      }
+    } catch (e) {
+      console.error("IPC list-subdirs error:", e);
+    }
+  }
+
+  const handleBrowseParent = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    const selected = await window.tintd.ipcRenderer.invoke("folders:select");
+    if (selected) {
+      setParentPath(selected);
+      setSelectedFolderPath("");
+      loadSubdirs(selected);
+    }
+  };
+
+  const handleDragDropFolder = (pathStr: string) => {
+    setParentPath(pathStr);
+    setSelectedFolderPath("");
+    loadSubdirs(pathStr);
+  };
+
+  // Batch Auto-Style all folders in workspace
+  const handleAutoStyleAll = async () => {
+    if (subdirs.length === 0 || !window.tintd?.ipcRenderer) return;
+    setIsBgStyling(true);
+    setToast({
+      message: "Running AI auto-style on subfolders...",
+      type: "info"
+    });
+    setTimeout(() => setToast(null), 3000);
+
+    try {
+      for (const subdir of subdirs) {
+        if (subdir.customization) continue; // skip already styled
+
+        const match = matchIconToFolderName(subdir.name, ALL_ICONS);
+        if (match && match.confidence >= 75) {
+          const color = suggestComplementaryColor(match.icon);
+          const { pixels, dataUrl } = await drawFolderIconToCanvas(color, match.icon.id);
+
+          const result = await window.tintd.ipcRenderer.invoke("applyFolderIcon", {
+            folderPath: subdir.path,
+            canvasImageData: Array.from(pixels),
+            canvasDataUrl: dataUrl,
+            selectedIcon: match.icon.id,
+            selectedColor: color,
+          });
+
+          if (result.success) {
+            await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
+              folderPath: subdir.path,
+              folderName: subdir.name,
+              suggestedIcon: match.icon.name,
+              appliedColor: color,
+              confidence: match.confidence,
+              status: "success"
+            });
+          }
+        }
+      }
+      triggerRefresh();
+      setToast({
+        message: "Successfully auto-styled matching folders!",
+        type: "success"
+      });
+      setTimeout(() => setToast(null), 4500);
+    } catch (err) {
+      console.error("Batch auto-style error:", err);
+    } finally {
+      setIsBgStyling(false);
+    }
+  };
+
+  // Batch Reset all customized folders in workspace
+  const handleResetAll = async () => {
+    const customized = subdirs.filter((s) => s.customization);
+    if (customized.length === 0 || !window.tintd?.ipcRenderer) return;
+    
+    if (!confirm("Are you sure you want to reset all folder icons in this directory?")) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      for (const folder of customized) {
+        await window.tintd.ipcRenderer.invoke("removeFolderIcon", folder.path);
+      }
+      triggerRefresh();
+      setToast({
+        message: "All folders reverted to system default.",
+        type: "success"
+      });
+      setTimeout(() => setToast(null), 4000);
+    } catch (err) {
+      console.error("Batch reset error:", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Watcher IPC Event listener
   useEffect(() => {
     if (!window.tintd?.ipcRenderer) return;
 
@@ -83,7 +188,6 @@ export function MainContent() {
           const color = suggestComplementaryColor(match.icon);
 
           if (match.confidence >= 75) {
-            // Auto-style!
             const { pixels, dataUrl } = await drawFolderIconToCanvas(color, match.icon.id);
 
             const result = await window.tintd.ipcRenderer.invoke("applyFolderIcon", {
@@ -104,7 +208,6 @@ export function MainContent() {
                 status: "success"
               });
 
-              // Show visual toast
               setToast({
                 message: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
                 type: "info",
@@ -112,18 +215,9 @@ export function MainContent() {
               });
               setTimeout(() => setToast(null), 5000);
 
-              // Show native OS notification
               if (Notification.permission === "granted") {
                 new Notification("Folder Auto-Styled", {
                   body: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
-                });
-              } else if (Notification.permission !== "denied") {
-                Notification.requestPermission().then((permission) => {
-                  if (permission === "granted") {
-                    new Notification("Folder Auto-Styled", {
-                      body: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
-                    });
-                  }
                 });
               }
 
@@ -139,7 +233,6 @@ export function MainContent() {
               });
             }
           } else if (match.confidence >= 50) {
-            // Suggestion only (weak match)
             await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
               folderPath,
               folderName,
@@ -163,61 +256,13 @@ export function MainContent() {
     }
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore shortcut key bindings if typing in fields
-      if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA"
-      ) {
-        if (!(e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l")) {
-          return;
-        }
-      }
-
-      if (e.ctrlKey && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        const browseBtn = document.getElementById("folders-browse-btn");
-        if (browseBtn) browseBtn.click();
-      } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {
-        e.preventDefault();
-        setActiveTab("library");
-        setTimeout(() => {
-          const searchInput = document.getElementById("library-search") || document.getElementById("right-panel-icon-search");
-          if (searchInput) (searchInput as HTMLInputElement).focus();
-        }, 100);
-      } else if (e.ctrlKey && e.key === ",") {
-        e.preventDefault();
-        setActiveTab("settings");
-      } else if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
-        const applyBtn = document.getElementById("right-panel-apply-btn");
-        if (applyBtn && !applyBtn.getAttribute("disabled")) {
-          e.preventDefault();
-          applyBtn.click();
-        }
-      } else if (e.key === "Delete") {
-        const removeBtn = document.getElementById("right-panel-remove-btn");
-        if (removeBtn && !removeBtn.getAttribute("disabled")) {
-          e.preventDefault();
-          removeBtn.click();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedFolderPath, selectedColor, selectedIconId, busy]);
-
-  const meta = TAB_META[activeTab];
-  const Icon = meta.icon;
-
   async function handleApply() {
     if (!selectedFolderPath.trim()) return;
     setBusy(true);
     try {
       if (!window.tintd?.ipcRenderer) throw new Error("IPC not available");
       const { pixels, dataUrl } = await drawFolderIconToCanvas(selectedColor, selectedIconId);
-      
+
       const result = await window.tintd.ipcRenderer.invoke("applyFolderIcon", {
         folderPath: selectedFolderPath,
         canvasImageData: Array.from(pixels),
@@ -251,16 +296,16 @@ export function MainContent() {
     }
   }
 
-  async function handleRemove() {
-    if (!selectedFolderPath.trim()) return;
+  async function handleRemove(pathStr: string = selectedFolderPath) {
+    if (!pathStr.trim()) return;
     setBusy(true);
     try {
       if (!window.tintd?.ipcRenderer) throw new Error("IPC not available");
-      const result = await window.tintd.ipcRenderer.invoke("removeFolderIcon", selectedFolderPath);
+      const result = await window.tintd.ipcRenderer.invoke("removeFolderIcon", pathStr);
       if (result.success) {
         triggerRefresh();
         setToast({
-          message: `Reverted folder icon to Windows system default.`,
+          message: `Reverted folder icon to system default.`,
           type: "success",
           iconId: "folder"
         });
@@ -289,21 +334,11 @@ export function MainContent() {
       return;
     }
 
-    // Check if the folder is already customized in history
-    let existingCustomization = null;
-    if (window.tintd?.ipcRenderer) {
-      try {
-        const history = await window.tintd.ipcRenderer.invoke("icons:history");
-        existingCustomization = history.find((h: any) => h.folderPath === path);
-      } catch (e) {
-        console.error("Failed to query customizations history:", e);
-      }
-    }
-
-    if (existingCustomization) {
-      setSelectedColor(existingCustomization.color);
-      setSelectedIconId(existingCustomization.iconId || "folder");
-      setSuggestion(null); // No suggestion for already customized folders
+    const subdir = subdirs.find((s) => s.path === path);
+    if (subdir && subdir.customization) {
+      setSelectedColor(subdir.customization.color);
+      setSelectedIconId(subdir.customization.iconId || "folder");
+      setSuggestion(null);
     } else {
       const folderName = path.split("\\").pop() || "Folder";
       const matched = matchIconToFolderName(folderName, ALL_ICONS);
@@ -328,102 +363,132 @@ export function MainContent() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* Sidebar */}
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        collapsed={sidebarCollapsed}
-      />
-
-      {/* Center: Header + Content */}
+    <div className="flex h-screen w-full overflow-hidden bg-[#161616] text-[#dfdfdf]">
+      {/* Center Main Column */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="relative flex h-14 flex-shrink-0 items-center justify-between border-b border-border/60 bg-card/60 px-5 backdrop-blur-sm">
+        
+        {/* ── macOS Header Top Bar ── */}
+        <header className="relative flex h-14 flex-shrink-0 items-center justify-between border-b border-white/5 bg-[#1a1a1a]/80 px-4 backdrop-blur-sm select-none">
           {/* Subtle bottom gradient line */}
-          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent pointer-events-none" />
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
 
-          <div className="flex items-center gap-3">
-            {/* Collapse toggle */}
-            <Button
-              id="sidebar-collapse-btn"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
-              onClick={() => setSidebarCollapsed((v) => !v)}
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </Button>
-
-            <div className="h-4 w-px bg-border/70" />
-
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-                <Icon className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <h2 className="text-[13px] font-bold text-foreground tracking-tight">{meta.label}</h2>
-              <span className="hidden text-muted-foreground/30 md:inline text-sm">·</span>
-              <p className="hidden text-[11px] text-muted-foreground/70 md:block">{meta.description}</p>
+          {/* Left Side: macOS Dots + Breadcrumbs + Pills */}
+          <div className="flex items-center gap-4">
+            {/* macOS window dots */}
+            <div className="flex items-center gap-1.5 pr-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#ff5f56] opacity-90" />
+              <span className="w-3 h-3 rounded-full bg-[#ffbd2e] opacity-90" />
+              <span className="w-3 h-3 rounded-full bg-[#27c93f] opacity-90" />
             </div>
+
+            {/* Back button (returns to folder grid) */}
+            {activeTab !== "folders" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-white"
+                onClick={() => setActiveTab("folders")}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
+
+            {/* Breadcrumb Workspace Path */}
+            <div
+              onClick={handleBrowseParent}
+              className="flex items-center gap-1.5 px-3 py-1 bg-black/45 border border-white/5 rounded-lg text-xs font-semibold text-muted-foreground hover:bg-black/60 hover:text-white cursor-pointer transition-all max-w-[280px] sm:max-w-[340px] truncate"
+              title="Click to change workspace parent directory"
+            >
+              <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/60" />
+              <span className="truncate">
+                {parentPath ? parentPath.replace(/\\/g, " › ") : "Choose parent folder…"}
+              </span>
+            </div>
+
+            {/* Pill batch buttons (Only when viewing subdirs) */}
+            {parentPath && activeTab === "folders" && (
+              <div className="flex items-center gap-2 border-l border-white/5 pl-3">
+                <button
+                  onClick={handleAutoStyleAll}
+                  className="px-2.5 py-1 text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 rounded-full hover:bg-primary/20 transition-all flex items-center gap-1.5"
+                  title="Auto-style all matching subdirectories"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Auto
+                </button>
+                <button
+                  onClick={handleResetAll}
+                  className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground bg-white/5 border border-white/5 rounded-full hover:bg-white/10 hover:text-foreground transition-all flex items-center gap-1.5"
+                  title="Reset all folder icons in this directory"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reset
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Right Side: Header Menu Tools (Home, History, Settings) */}
+          <div className="flex items-center gap-1">
             {isBgStyling && (
-              <Badge variant="outline" className="border-primary/40 text-primary animate-pulse flex items-center gap-1.5 text-[9px] bg-primary/6 mr-1 rounded-full px-2.5 py-1">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span className="font-semibold">Auto-styling…</span>
+              <Badge variant="outline" className="border-primary/40 text-primary animate-pulse flex items-center gap-1 text-[9px] bg-primary/5 mr-2 rounded-full px-2 py-0.5">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                <span>Auto-styling…</span>
               </Badge>
             )}
-            <Badge
-              variant="outline"
-              className="hidden border-primary/25 text-[9px] text-primary sm:flex rounded-full px-2.5 font-bold"
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8 rounded-lg", activeTab === "folders" ? "bg-white/5 text-white" : "text-muted-foreground hover:text-white")}
+              onClick={() => setActiveTab("folders")}
+              title="Workspace Folders"
             >
-              v0.1.0
-            </Badge>
-            <Badge variant="secondary" className="hidden text-[9px] sm:flex rounded-full px-2.5 font-semibold">
-              Windows
-            </Badge>
+              <Home className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8 rounded-lg", activeTab === "recent" ? "bg-white/5 text-white" : "text-muted-foreground hover:text-white")}
+              onClick={() => setActiveTab("recent")}
+              title="Recent Customization History"
+            >
+              <Clock className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8 rounded-lg", activeTab === "settings" ? "bg-white/5 text-white" : "text-muted-foreground hover:text-white")}
+              onClick={() => setActiveTab("settings")}
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
         </header>
 
-        {/* Tab content */}
-        <main className="flex-1 overflow-hidden p-6 flex flex-col gap-4">
-          {!window.tintd?.ipcRenderer && (
-            <div className="flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-500 shadow-sm backdrop-blur-md">
-              <Clock className="h-5 w-5 flex-shrink-0 animate-pulse" /> {/* Reuse Clock or import AlertTriangle */}
-              <div className="flex-1">
-                <p className="font-semibold text-yellow-400">Running in Web Browser Mode</p>
-                <p className="mt-0.5 text-xs text-yellow-500/80">
-                  Native Windows folder browsing, drag & drop, and icon generation require the desktop wrapper.
-                  Please launch using <strong>npm run dev</strong> and use the desktop window.
-                </p>
-              </div>
-            </div>
-          )}
+        {/* ── Center Content Area ── */}
+        <main className="flex-1 overflow-hidden p-5 flex flex-col gap-4">
           <div key={activeTab} className="flex-1 overflow-hidden tab-transition">
+            
             {activeTab === "folders" && (
               <FoldersTab
+                parentPath={parentPath}
+                subdirs={subdirs}
                 selectedFolderPath={selectedFolderPath}
                 onFolderSelect={handleFolderSelect}
-                refreshTrigger={historyVersion}
-                onRefreshNeeded={triggerRefresh}
+                onBrowseParent={handleBrowseParent}
+                onResetFolder={handleRemove}
+                onDragDropFolder={handleDragDropFolder}
               />
             )}
-            {activeTab === "library" && (
-              <LibraryTab
-                onIconSelect={setSelectedIconId}
-                selectedIcon={selectedIconId}
-              />
-            )}
+            
             {activeTab === "recent" && (
               <RecentTab refreshTrigger={historyVersion} />
             )}
+            
             {activeTab === "settings" && (
               <SettingsTab
                 settings={settings}
@@ -434,7 +499,7 @@ export function MainContent() {
         </main>
       </div>
 
-      {/* Right Panel */}
+      {/* Right Customization Panel */}
       <RightPanel
         color={selectedColor}
         onColorChange={setSelectedColor}
@@ -442,7 +507,7 @@ export function MainContent() {
         onIconSelect={setSelectedIconId}
         folderPath={selectedFolderPath}
         onApply={handleApply}
-        onRemove={handleRemove}
+        onRemove={() => handleRemove()}
         busy={busy}
         suggestion={suggestion}
       />
@@ -451,27 +516,25 @@ export function MainContent() {
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 toast-in">
           <div
-            className={`flex items-start gap-3 px-4 py-3.5 rounded-2xl border shadow-2xl glass max-w-[320px] ${
+            className={`flex items-start gap-3 px-4 py-3 rounded-2xl border shadow-2xl glass max-w-[320px] ${
               toast.type === "success"
-                ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-100"
+                ? "bg-[#0c2e1f]/90 border-emerald-500/20 text-emerald-100"
                 : toast.type === "error"
-                ? "bg-rose-950/90 border-rose-500/30 text-rose-100"
-                : "bg-sky-950/90 border-sky-500/30 text-sky-100"
+                ? "bg-[#330f14]/90 border-rose-500/20 text-rose-100"
+                : "bg-[#0b253b]/90 border-sky-500/20 text-sky-100"
             }`}
           >
-            {/* Icon */}
-            <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white text-base ${
-              toast.type === "success" ? "border border-emerald-400/20" : toast.type === "error" ? "border border-rose-400/20" : "border border-sky-400/20"
-            }`}>
+            {/* Icon box */}
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white text-base">
               {toast.iconId === "folder" ? "📁" : toast.iconId?.startsWith("emoji-")
-                ? ALL_ICONS.find(i => i.id === toast.iconId)?.emoji || "💡"
+                ? ALL_ICONS.find((i) => i.id === toast.iconId)?.emoji || "💡"
                 : <Sparkles className="h-4 w-4" />}
             </div>
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-              <h4 className="text-[9px] font-black uppercase tracking-[0.14em] opacity-70 mb-0.5">
-                {toast.type === "success" ? "✓ Icon Applied" : toast.type === "error" ? "✗ Error" : "✦ Auto-Styled"}
+              <h4 className="text-[8px] font-black uppercase tracking-[0.14em] opacity-70 mb-0.5">
+                {toast.type === "success" ? "✓ Applied" : toast.type === "error" ? "✗ Error" : "✦ Notification"}
               </h4>
               <p className="text-[12px] font-semibold leading-snug">{toast.message}</p>
             </div>
@@ -479,7 +542,7 @@ export function MainContent() {
             {/* Dismiss */}
             <button
               onClick={() => setToast(null)}
-              className="text-white/40 hover:text-white/90 text-sm self-start ml-1 leading-none mt-0.5 transition-colors"
+              className="text-white/40 hover:text-white/90 text-xs self-start ml-1"
             >
               ✕
             </button>

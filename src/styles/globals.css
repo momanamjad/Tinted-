@@ -29,24 +29,24 @@
   }
 
   .dark {
-    --background: 222 22% 7%;
+    --background: 0 0% 9%;
     --foreground: 210 20% 94%;
-    --card: 222 20% 10%;
+    --card: 0 0% 10%;
     --card-foreground: 210 20% 94%;
-    --popover: 222 20% 12%;
+    --popover: 0 0% 8%;
     --popover-foreground: 210 20% 94%;
     --primary: 158 72% 48%;
     --primary-foreground: 158 90% 6%;
-    --secondary: 220 14% 15%;
+    --secondary: 0 0% 17%;
     --secondary-foreground: 210 20% 94%;
-    --muted: 220 14% 13%;
+    --muted: 0 0% 12%;
     --muted-foreground: 220 12% 56%;
     --accent: 190 75% 12%;
     --accent-foreground: 178 68% 86%;
     --destructive: 0 68% 54%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
     --ring: 158 72% 48%;
   }
 
@@ -290,5 +290,34 @@
     transform: scale(1.18);
     z-index: 10;
     box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--foreground) / 0.8);
+  }
+
+  /* ─── HSL Range Sliders (macOS style) ─── */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 14px;
+    width: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1.5px solid #1a1a1a;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+    cursor: pointer;
+    margin-top: -3px;
+    transition: transform 0.1s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 99px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 }

@@ -1,84 +1,120 @@
-import { useEffect, useState } from "react";
-import {
-  CheckCircle2,
-  ChevronRight,
-  FolderOpen,
-  FolderHeart,
-  MoreHorizontal,
-  RotateCcw,
-  Star,
-  Upload,
-  X,
-} from "lucide-react";
+import { FolderOpen, RotateCcw, Upload, X } from "lucide-react";
 import * as LucideIcons from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/utils/cn";
 import { ALL_ICONS } from "@/data/icons";
+import { adjustBrightness } from "@/utils/colors";
+import { cn } from "@/utils/cn";
+import { Button } from "@/components/ui/button";
 
-type FoldersTabProps = {
-  selectedFolderPath?: string;
-  onFolderSelect?: (path: string, color: string) => void;
-  refreshTrigger?: number;
-  onRefreshNeeded?: () => void;
+type SubdirType = {
+  name: string;
+  path: string;
+  customization: {
+    color: string;
+    iconId: string;
+    icoPath: string;
+  } | null;
 };
 
-export function FoldersTab({
-  selectedFolderPath = "",
-  onFolderSelect,
-  refreshTrigger = 0,
-  onRefreshNeeded,
-}: FoldersTabProps) {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [folders, setFolders] = useState<any[]>([]);
-  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+type FoldersTabProps = {
+  parentPath: string;
+  subdirs: SubdirType[];
+  selectedFolderPath: string;
+  onFolderSelect: (path: string, color: string) => void;
+  onBrowseParent: () => void;
+  onResetFolder: (path: string) => void;
+  onDragDropFolder: (path: string) => void;
+};
 
-  useEffect(() => {
-    loadFolders();
-  }, [refreshTrigger]);
-
-  async function loadFolders() {
-    if (!window.tintd?.ipcRenderer) return;
-    try {
-      const history = await window.tintd.ipcRenderer.invoke("icons:history");
-      const list = history.map((record: any) => ({
-        id: record.id,
-        name: record.folderPath.split("\\").pop() || "Folder",
-        path: record.folderPath,
-        color: record.color,
-        iconId: record.iconId,
-        applied: record.status === "applied",
-        date: formatDateRelative(record.updatedAt),
-      }));
-      setFolders(list);
-    } catch (err) {
-      console.error("Failed to load customized folders:", err);
+// Mini 3D macOS folder renderer for the grid cards
+function MiniFolderIcon({ color, iconId }: { color?: string; iconId?: string }) {
+  const isCustom = Boolean(color);
+  const baseColor = color || "#e5a93b"; // standard macOS folder warm gold
+  
+  const backColor = adjustBrightness(baseColor, -12);
+  const frontTopColor = adjustBrightness(baseColor, 12);
+  const frontBottomColor = adjustBrightness(baseColor, -16);
+  
+  let SelectedIcon: any = null;
+  let selectedEmoji: string | undefined = undefined;
+  
+  if (isCustom && iconId && iconId !== "folder") {
+    const found = ALL_ICONS.find((i) => i.id === iconId);
+    if (found) {
+      if (found.lucideIcon) {
+        SelectedIcon = (LucideIcons as any)[found.lucideIcon];
+      } else if (found.emoji) {
+        selectedEmoji = found.emoji;
+      }
     }
   }
 
-  function formatDateRelative(dateStr: string) {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
+  const getIconOverlayColor = (hexStr: string): string => {
+    const hex = hexStr.replace("#", "");
+    const r = parseInt(hex.substring(0, 2), 16) || 0;
+    const g = parseInt(hex.substring(2, 4), 16) || 0;
+    const b = parseInt(hex.substring(4, 6), 16) || 0;
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    return luminance > 180 ? "rgba(0, 0, 0, 0.4)" : "rgba(255, 255, 255, 0.7)";
+  };
 
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return "Yesterday";
-    return `${diffDays}d ago`;
-  }
+  const iconColor = getIconOverlayColor(baseColor);
+
+  return (
+    <div className="relative h-[62px] w-[80px] transition-transform duration-200 group-hover:scale-105 select-none">
+      {/* Folder tab */}
+      <div
+        className="absolute left-0 top-0 h-[12px] w-[34px] rounded-t-[4px] transition-all"
+        style={{ backgroundColor: backColor }}
+      />
+      {/* Folder back body */}
+      <div
+        className="absolute top-[7px] left-0 w-[80px] h-[55px] rounded-[6px] transition-all"
+        style={{ backgroundColor: backColor }}
+      />
+      {/* Folder front body */}
+      <div
+        className="absolute top-[18px] left-0 w-[80px] h-[44px] rounded-[6px] shadow-[0_3px_6px_rgba(0,0,0,0.22)] transition-all border border-white/5 overflow-hidden"
+        style={{
+          background: `linear-gradient(to bottom, ${frontTopColor}, ${frontBottomColor})`
+        }}
+      >
+        {/* Front flap top highlight */}
+        <div className="absolute top-[0.5px] left-[1px] right-[1px] h-[1px] bg-white/35" />
+
+        {/* Icon centred in front body */}
+        <div className="flex h-full items-center justify-center pb-0.5">
+          {SelectedIcon ? (
+            <SelectedIcon
+              className="h-[20px] w-[20px]"
+              style={{ color: iconColor }}
+              strokeWidth={3}
+            />
+          ) : selectedEmoji ? (
+            <span className="text-lg select-none font-sans leading-none">{selectedEmoji}</span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FoldersTab({
+  parentPath,
+  subdirs,
+  selectedFolderPath,
+  onFolderSelect,
+  onBrowseParent,
+  onResetFolder,
+  onDragDropFolder,
+}: FoldersTabProps) {
+  const isDragOver = false;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(true);
   };
-  const handleDragLeave = () => setIsDragOver(false);
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
     const files = e.dataTransfer.files;
     if (files && files[0]) {
       let filePath = "";
@@ -87,257 +123,94 @@ export function FoldersTab({
       } else {
         filePath = (files[0] as any).path || "";
       }
-      if (filePath) onFolderSelect?.(filePath, "#3b82f6");
+      if (filePath) onDragDropFolder(filePath);
     }
   };
 
-  const handleBrowse = async () => {
-    if (!window.tintd?.ipcRenderer) return;
-    const selected = await window.tintd.ipcRenderer.invoke("folders:select");
-    if (selected) onFolderSelect?.(selected, "#3b82f6");
-  };
-
-  const handleReset = async (folderPath: string) => {
-    if (!window.tintd?.ipcRenderer) return;
-    try {
-      const result = await window.tintd.ipcRenderer.invoke("removeFolderIcon", folderPath);
-      if (result.success) {
-        onRefreshNeeded?.();
-        loadFolders();
-      } else {
-        alert("Error resetting: " + result.error);
-      }
-    } catch (err: any) {
-      alert("Failed to reset: " + err.message);
-    }
-    setMenuOpenId(null);
-  };
-
-  return (
-    <div className="flex h-full flex-col gap-5 overflow-auto pb-4">
-      {/* Selected folder banner */}
-      {selectedFolderPath && (
-        <div className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/8 to-primary/4 p-4 shadow-sm float-in">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/15 border border-primary/20">
-            <FolderOpen className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-primary/80 mb-0.5">
-              Selected Folder
-            </p>
-            <p className="truncate text-[13px] font-bold text-foreground">
-              {selectedFolderPath.split("\\").pop() || "Folder"}
-            </p>
-            <p className="truncate text-[10px] text-muted-foreground font-mono mt-0.5" title={selectedFolderPath}>
-              {selectedFolderPath}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground flex-shrink-0"
-            onClick={() => onFolderSelect?.("", "#3b82f6")}
-            title="Clear selection"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
-
-      {/* Drop Zone */}
+  if (!parentPath) {
+    // Empty state: Drag and drop or browse parent workspace
+    return (
       <div
-        id="folders-drop-zone"
         onDragOver={handleDragOver}
-        onDragEnter={handleDragOver}
-        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "relative flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-250 overflow-hidden",
-          isDragOver
-            ? "border-primary bg-primary/6 scale-[1.01]"
-            : "border-border/50 bg-card/30 hover:border-primary/30 hover:bg-card/50"
+          "flex flex-col items-center justify-center h-full gap-5 border border-white/5 rounded-2xl p-10 text-center transition-all bg-[#141414]/30 hover:bg-[#141414]/50 border-dashed"
         )}
       >
-        {/* Subtle radial glow when dragging */}
-        {isDragOver && (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.1),transparent_70%)] pointer-events-none" />
-        )}
-
-        <div
-          className={cn(
-            "flex h-16 w-16 items-center justify-center rounded-2xl border border-border/40 bg-secondary/50 transition-all duration-200",
-            isDragOver && "border-primary/50 bg-primary/10 scale-110 shadow-primary-glow"
-          )}
-        >
-          <Upload
-            className={cn(
-              "h-7 w-7 transition-colors duration-200",
-              isDragOver ? "text-primary" : "text-muted-foreground"
-            )}
-          />
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/5 bg-[#1a1a1a]/60">
+          <Upload className="h-6 w-6 text-muted-foreground" />
         </div>
         <div>
           <p className="text-[15px] font-semibold text-foreground">
-            {isDragOver ? "Release to add folder" : "Drop a folder here"}
+            No Workspace Folder Selected
           </p>
-          <p className="mt-1 text-[12px] text-muted-foreground">
-            Drag & drop any Windows folder to customize it
+          <p className="mt-1.5 text-xs text-muted-foreground max-w-[280px] mx-auto leading-relaxed">
+            Drag & drop a parent directory here, or click below to browse and view all its subfolders.
           </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="h-px w-12 bg-border/50" />
-          <span className="text-xs text-muted-foreground/60">or</span>
-          <div className="h-px w-12 bg-border/50" />
         </div>
         <Button
           id="folders-browse-btn"
-          variant="outline"
-          size="sm"
-          className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/5 rounded-xl h-9 px-5 font-semibold text-[12px]"
-          onClick={handleBrowse}
+          className="gap-2 bg-white hover:bg-white/90 text-black rounded-xl h-9 px-5 font-bold text-xs shadow-md"
+          onClick={onBrowseParent}
         >
-          <FolderOpen className="h-4 w-4 text-primary" />
-          Browse Folders
+          <FolderOpen className="h-4 w-4 text-black" />
+          Choose Workspace
         </Button>
       </div>
+    );
+  }
 
-      {/* Recently customized */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Star className="h-3.5 w-3.5 text-primary" />
-            <h3 className="text-[13px] font-bold text-foreground">Recently Customized</h3>
-            <Badge
-              variant="secondary"
-              className="text-[9px] font-bold px-1.5 py-0 h-4 rounded-full"
+  return (
+    <div className="flex h-full flex-col gap-4 overflow-auto pr-1">
+      {/* ── Subfolder Grid ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 pb-6">
+        {subdirs.map((subdir) => {
+          const isSelected = selectedFolderPath === subdir.path;
+          const isCustom = Boolean(subdir.customization);
+          const folderColor = subdir.customization?.color;
+          const iconId = subdir.customization?.iconId;
+
+          return (
+            <div
+              key={subdir.path}
+              onClick={() => onFolderSelect(subdir.path, folderColor || "#ffc55a")}
+              className={cn(
+                "group relative flex flex-col items-center gap-2.5 rounded-2xl p-3 border transition-all duration-200 cursor-pointer",
+                isSelected
+                  ? "bg-[#252525] border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+                  : "bg-black/15 border-white/5 hover:bg-white/5 hover:border-white/10"
+              )}
             >
-              {folders.length}
-            </Badge>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 text-[11px] text-muted-foreground rounded-lg"
-          >
-            View All <ChevronRight className="h-3 w-3" />
-          </Button>
-        </div>
-
-        <div className="space-y-1.5">
-          {folders.map((folder) => {
-            let LucideIcon: any = FolderOpen;
-            let emojiChar: string | undefined = undefined;
-
-            if (folder.iconId) {
-              const found = ALL_ICONS.find((i) => i.id === folder.iconId);
-              if (found) {
-                if (found.lucideIcon) {
-                  LucideIcon = (LucideIcons as any)[found.lucideIcon] || FolderOpen;
-                } else if (found.emoji) {
-                  LucideIcon = null;
-                  emojiChar = found.emoji;
-                }
-              }
-            }
-
-            const isSelected = selectedFolderPath === folder.path;
-
-            return (
-              <div
-                key={folder.id}
-                className={cn(
-                  "group relative flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-all duration-200",
-                  isSelected
-                    ? "border-primary/30 bg-primary/6 shadow-sm"
-                    : "border-border/40 bg-card/50 hover:border-border/70 hover:bg-card hover:-translate-y-0.5 hover:shadow-card-hover"
-                )}
-                onClick={() => onFolderSelect?.(folder.path, folder.color)}
-              >
-                {/* Colored icon tile */}
-                <div
-                  className="relative h-10 w-10 flex-shrink-0 rounded-xl shadow-sm flex items-center justify-center overflow-hidden"
-                  style={{ backgroundColor: folder.color + "20" }}
+              {/* Close/Reset circle button (only if customized) */}
+              {isCustom && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onResetFolder(subdir.path);
+                  }}
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#333] hover:bg-[#ff3b30] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 shadow-md"
+                  title="Reset Folder Icon"
                 >
-                  <div
-                    className="absolute inset-0 opacity-10"
-                    style={{ backgroundColor: folder.color }}
-                  />
-                  {LucideIcon ? (
-                    <LucideIcon className="h-5 w-5 relative z-10" style={{ color: folder.color }} />
-                  ) : (
-                    <span className="text-xl select-none font-sans leading-none relative z-10">
-                      {emojiChar}
-                    </span>
-                  )}
-                </div>
+                  <span className="text-[10px] leading-none font-black text-white/80">✕</span>
+                </button>
+              )}
 
-                {/* Info */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className="truncate text-[13px] font-semibold text-foreground">{folder.name}</p>
-                    {folder.applied && (
-                      <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-primary" />
-                    )}
-                  </div>
-                  <p className="truncate text-[10px] text-muted-foreground/70 font-mono">
-                    {folder.path}
-                  </p>
-                </div>
-
-                {/* Color dot + date */}
-                <div className="flex flex-shrink-0 items-center gap-2">
-                  <div
-                    className="h-4 w-4 rounded-full border border-black/10 shadow-sm"
-                    style={{ backgroundColor: folder.color }}
-                  />
-                  <span className="text-[10px] text-muted-foreground/60 tabular-nums">{folder.date}</span>
-                </div>
-
-                {/* Menu */}
-                <div className="relative flex-shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpenId(menuOpenId === folder.id ? null : folder.id);
-                    }}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                  {menuOpenId === folder.id && (
-                    <div className="absolute right-0 top-8 z-50 w-36 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
-                      <button
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-[12px] text-foreground hover:bg-secondary/60 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleReset(folder.path);
-                        }}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" /> Reset Icon
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Active indicator bar */}
-                <span
-                  className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ backgroundColor: folder.color }}
-                />
+              {/* Folder Icon preview */}
+              <div className="h-[72px] flex items-center justify-center">
+                <MiniFolderIcon color={folderColor} iconId={iconId} />
               </div>
-            );
-          })}
-        </div>
 
-        {folders.length === 0 && (
-          <div className="flex h-28 items-center justify-center rounded-2xl border border-dashed border-border/40 bg-card/20">
-            <div className="flex flex-col items-center gap-2 text-muted-foreground">
-              <FolderHeart className="h-6 w-6 opacity-40" />
-              <p className="text-[12px] font-medium">No customized folders yet</p>
-              <p className="text-[10px] opacity-60">Drop a folder above to get started</p>
+              {/* Folder Name */}
+              <p className="text-[11px] font-bold text-foreground text-center truncate w-full px-1">
+                {subdir.name}
+              </p>
             </div>
+          );
+        })}
+
+        {subdirs.length === 0 && (
+          <div className="col-span-full py-16 text-center text-muted-foreground text-xs font-semibold">
+            No subfolders found inside this directory.
           </div>
         )}
       </div>

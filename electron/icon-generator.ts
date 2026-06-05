@@ -11,13 +11,51 @@ export function generateFolderIco(hexColor: string): Buffer {
   const base = hexToRgba(hexColor);
   const pixels = new Uint8ClampedArray(ICON_SIZE * ICON_SIZE * 4);
 
-  drawRoundedRect(pixels, 38, 78, 110, 48, 18, shade(base, 1.08));
-  drawRoundedRect(pixels, 30, 100, 198, 128, 20, shade(base, 0.88));
-  drawRoundedRect(pixels, 42, 116, 184, 98, 16, base);
-  drawRoundedRect(pixels, 52, 128, 164, 24, 12, shade(base, 1.22));
-  drawRoundedRect(pixels, 52, 178, 132, 12, 6, { r: 255, g: 255, b: 255, a: 36 });
+  const backColor = shade(base, 0.88); // equivalent to adjustBrightness(color, -12)
+  const frontTopColor = shade(base, 1.12); // equivalent to adjustBrightness(color, 12)
+  const frontBottomColor = shade(base, 0.84); // equivalent to adjustBrightness(color, -16)
+
+  // 1. Back Flap + Tab
+  drawRoundedRect(pixels, 32, 52, 80, 30, 10, backColor);
+  drawRoundedRect(pixels, 32, 68, 192, 136, 14, backColor);
+
+  // 2. Front Flap with linear gradient
+  drawGradientRoundedRect(pixels, 32, 90, 192, 114, 14, frontTopColor, frontBottomColor);
+
+  // 3. Front Flap top highlight line
+  drawRoundedRect(pixels, 34, 91, 188, 2, 1, { r: 255, g: 255, b: 255, a: 115 });
 
   return makeIco(pixels);
+}
+
+function drawGradientRoundedRect(
+  pixels: Uint8ClampedArray,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  topColor: Rgba,
+  bottomColor: Rgba
+) {
+  for (let py = y; py < y + height; py += 1) {
+    const t = (py - y) / (height - 1);
+    const color: Rgba = {
+      r: clamp(Math.round(topColor.r * (1 - t) + bottomColor.r * t)),
+      g: clamp(Math.round(topColor.g * (1 - t) + bottomColor.g * t)),
+      b: clamp(Math.round(topColor.b * (1 - t) + bottomColor.b * t)),
+      a: clamp(Math.round(topColor.a * (1 - t) + bottomColor.a * t))
+    };
+
+    for (let px = x; px < x + width; px += 1) {
+      const dx = Math.max(x - px + radius, 0, px - (x + width - radius - 1));
+      const dy = Math.max(y - py + radius, 0, py - (y + height - radius - 1));
+
+      if (dx * dx + dy * dy <= radius * radius) {
+        blendPixel(pixels, px, py, color);
+      }
+    }
+  }
 }
 
 export function makeIco(pixels: Uint8ClampedArray): Buffer {

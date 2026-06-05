@@ -47,65 +47,74 @@ export function IconPreview({
     }
   }
 
-  const darkColor = getContrastColor(color);
-  const lightColor = adjustBrightness(color, 28);
+  const backColor = adjustBrightness(color, -12);
+  const frontTopColor = adjustBrightness(color, 12);
+  const frontBottomColor = adjustBrightness(color, -16);
 
-  // Parse color to rgba for dynamic glow
-  const glowStyle = { boxShadow: `0 12px 32px 0 ${color}55, 0 2px 8px 0 ${color}33` };
+  const getIconOverlayColor = (hexStr: string): string => {
+    const hex = hexStr.replace("#", "");
+    const r = parseInt(hex.substring(0, 2), 16) || 0;
+    const g = parseInt(hex.substring(2, 4), 16) || 0;
+    const b = parseInt(hex.substring(4, 6), 16) || 0;
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    return luminance > 180 ? "rgba(0, 0, 0, 0.45)" : "rgba(255, 255, 255, 0.75)";
+  };
+
+  const iconColor = getIconOverlayColor(color);
 
   return (
     <div className="space-y-4">
       {/* ── Large Folder Preview ── */}
       <div
         key={`${color}-${selectedIconId}`}
-        className="preview-update flex flex-col items-center gap-4 rounded-2xl border border-border/40 bg-gradient-to-b from-secondary/30 to-background/60 px-4 py-7 transition-all duration-300 hover:border-primary/20 relative overflow-hidden"
+        className="preview-update flex flex-col items-center gap-4 rounded-2xl border border-border/40 bg-gradient-to-b from-secondary/15 to-background/40 px-4 py-7 transition-all duration-300 hover:border-primary/10 relative overflow-hidden"
       >
         {/* Ambient glow behind folder */}
         <div
-          className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-28 h-10 rounded-full blur-2xl opacity-40 pointer-events-none"
+          className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-36 h-10 rounded-full blur-2xl opacity-20 pointer-events-none"
           style={{ backgroundColor: color }}
         />
 
-        {/* Folder shape */}
-        <div className="relative h-28 w-36 drop-shadow-xl">
+        {/* macOS Folder shape */}
+        <div className="relative h-[152px] w-[192px] transition-transform duration-300 hover:scale-105">
           {/* Folder tab */}
           <div
-            className="absolute left-2 top-0 h-6 w-[58px] rounded-t-lg"
-            style={{ backgroundColor: lightColor }}
+            className="absolute left-0 top-0 h-[30px] w-[80px] rounded-t-[10px] shadow-sm transition-all"
+            style={{ backgroundColor: backColor }}
           />
-          {/* Folder body */}
+          {/* Folder back body */}
           <div
-            className="absolute bottom-0 left-0 right-0 top-4 rounded-b-2xl rounded-tr-2xl shadow-folder"
-            style={{ backgroundColor: color }}
+            className="absolute top-[16px] left-0 w-[192px] h-[136px] rounded-[14px] transition-all"
+            style={{ backgroundColor: backColor }}
+          />
+          {/* Folder front body */}
+          <div
+            className="absolute top-[38px] left-0 w-[192px] h-[114px] rounded-[14px] shadow-[0_6px_16px_rgba(0,0,0,0.22)] transition-all border border-white/5 overflow-hidden"
+            style={{
+              background: `linear-gradient(to bottom, ${frontTopColor}, ${frontBottomColor})`
+            }}
           >
-            {/* Top shine */}
-            <div className="absolute inset-x-3 top-2.5 h-[3px] rounded-full bg-white/25" />
-            {/* Secondary shine */}
-            <div className="absolute inset-x-6 top-6 h-px rounded-full bg-white/10" />
+            {/* Front flap top highlight (bevel reflection) */}
+            <div className="absolute top-[1px] left-[2px] right-[2px] h-[2px] rounded-full bg-white/45" />
 
-            {/* Icon centred in body */}
-            <div className="flex h-full items-center justify-center">
+            {/* Icon centred in front body */}
+            <div className="flex h-full items-center justify-center pb-1">
               {SelectedIcon ? (
                 <SelectedIcon
-                  className="h-9 w-9 opacity-90 drop-shadow-sm"
-                  style={{ color: darkColor }}
+                  className="h-[52px] w-[52px] transition-all"
+                  style={{ color: iconColor }}
+                  strokeWidth={3.5}
                 />
               ) : (
                 <span
-                  className="text-4xl opacity-90 select-none font-sans leading-none drop-shadow-sm"
-                  style={{ color: darkColor }}
+                  className="text-5xl select-none font-sans leading-none"
+                  style={{ color: iconColor }}
                 >
                   {selectedEmoji}
                 </span>
               )}
             </div>
           </div>
-
-          {/* Folder shadow */}
-          <div
-            className="absolute -bottom-3 left-5 right-5 h-4 rounded-full blur-lg opacity-45"
-            style={{ backgroundColor: color }}
-          />
         </div>
 
         {/* Folder name + color */}
