@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -23,43 +25,91 @@
     --border: 220 13% 86%;
     --input: 220 13% 86%;
     --ring: 160 84% 39%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 240 10% 6%;
+    --background: 240 10% 5.5%;
     --foreground: 0 0% 96%;
-    --card: 240 8% 9%;
+    --card: 240 9% 8%;
     --card-foreground: 0 0% 96%;
-    --popover: 240 8% 9%;
+    --popover: 240 8% 10%;
     --popover-foreground: 0 0% 96%;
     --primary: 160 84% 45%;
     --primary-foreground: 160 90% 8%;
-    --secondary: 220 12% 16%;
+    --secondary: 220 12% 14%;
     --secondary-foreground: 0 0% 96%;
-    --muted: 220 12% 15%;
-    --muted-foreground: 220 9% 68%;
-    --accent: 190 80% 18%;
+    --muted: 220 12% 13%;
+    --muted-foreground: 220 9% 60%;
+    --accent: 190 80% 14%;
     --accent-foreground: 180 72% 88%;
     --destructive: 0 72% 52%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 12% 20%;
-    --input: 220 12% 20%;
+    --border: 220 12% 17%;
+    --input: 220 12% 17%;
     --ring: 160 84% 45%;
   }
 
   * {
     @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    min-width: 1200px;
-    min-height: 800px;
+    @apply bg-background text-foreground;
+    min-width: 900px;
+    min-height: 600px;
+    overflow: hidden;
   }
 
-  button,
-  input {
+  button, input {
     font: inherit;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+
+  /* Selection color */
+  ::selection {
+    background: hsl(var(--primary) / 0.25);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+  
+  /* Glassmorphism helper */
+  .glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Smooth transition all */
+  .transition-smooth {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }

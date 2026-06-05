@@ -1,24 +1,10 @@
-import { contextBridge, ipcRenderer } from "electron";
-import type {
-  ApplyIconRequest,
-  FolderIconRecord,
-  Settings,
-  SettingValue
-} from "./types.js";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-const api = {
-  getSettings: () => ipcRenderer.invoke("settings:get") as Promise<Settings>,
-  setSetting: (key: keyof Settings, value: SettingValue) =>
-    ipcRenderer.invoke("settings:set", key, value) as Promise<Settings>,
-  selectFolder: () => ipcRenderer.invoke("folders:select") as Promise<string | null>,
-  applyIcon: (request: ApplyIconRequest) =>
-    ipcRenderer.invoke("icons:apply", request) as Promise<FolderIconRecord>,
-  resetIcon: (folderPath: string) =>
-    ipcRenderer.invoke("icons:reset", folderPath) as Promise<FolderIconRecord>,
-  getIconHistory: () =>
-    ipcRenderer.invoke("icons:history") as Promise<FolderIconRecord[]>,
-  revealFolder: (folderPath: string) =>
-    ipcRenderer.invoke("folders:reveal", folderPath) as Promise<void>
-};
-
-contextBridge.exposeInMainWorld("tintd", api);
+contextBridge.exposeInMainWorld("tintd", {
+  ipcRenderer: {
+    invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
+    on: (channel: string, listener: (event: IpcRendererEvent, ...args: any[]) => void) =>
+      ipcRenderer.on(channel, listener),
+    send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+  },
+});

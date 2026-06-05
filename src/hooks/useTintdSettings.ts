@@ -14,9 +14,16 @@ export function useTintdSettings() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    window.tintd
-      .getSettings()
+    if (!window.tintd?.ipcRenderer) {
+      console.error("IPC bridge not available");
+      setLoading(false);
+      return;
+    }
+
+    window.tintd.ipcRenderer
+      .invoke("settings:get")
       .then(setSettings)
+      .catch((err: any) => console.error("Failed to get settings", err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -26,7 +33,12 @@ export function useTintdSettings() {
 
   const updateSetting = useCallback(
     async <K extends keyof Settings>(key: K, value: SettingValue) => {
-      const next = await window.tintd.setSetting(key, value);
+      if (!window.tintd?.ipcRenderer) {
+        console.error("IPC bridge not available");
+        return FALLBACK_SETTINGS;
+      }
+
+      const next = (await window.tintd.ipcRenderer.invoke("settings:set", key, value)) as Settings;
       setSettings(next);
       return next;
     },

@@ -1,5 +1,5 @@
-import { MainPage } from "@/pages/MainPage";
+import { MainContent } from "@/components/dashboard/MainContent";
 
 export default function App() {
-  return <MainPage />;
+  return <MainContent />;
 }

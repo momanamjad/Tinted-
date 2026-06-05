@@ -8,13 +8,11 @@ import type {
 declare global {
   interface Window {
     tintd: {
-      getSettings: () => Promise<Settings>;
-      setSetting: (key: keyof Settings, value: SettingValue) => Promise<Settings>;
-      selectFolder: () => Promise<string | null>;
-      applyIcon: (request: ApplyIconRequest) => Promise<FolderIconRecord>;
-      resetIcon: (folderPath: string) => Promise<FolderIconRecord>;
-      getIconHistory: () => Promise<FolderIconRecord[]>;
-      revealFolder: (folderPath: string) => Promise<void>;
+      ipcRenderer: {
+        invoke(channel: string, ...args: any[]): Promise<any>;
+        on(channel: string, listener: (event: any, ...args: any[]) => void): void;
+        send(channel: string, ...args: any[]): void;
+      };
     };
   }
 }

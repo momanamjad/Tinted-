@@ -55,12 +55,14 @@ export function MainPage() {
   );
 
   async function refreshHistory() {
-    const records = await window.tintd.getIconHistory();
+    if (!window.tintd?.ipcRenderer) return;
+    const records = await window.tintd.ipcRenderer.invoke("icons:history");
     setHistory(records);
   }
 
   async function pickFolder() {
-    const selected = await window.tintd.selectFolder();
+    if (!window.tintd?.ipcRenderer) return;
+    const selected = await window.tintd.ipcRenderer.invoke("folders:select");
     if (selected) {
       setFolderPath(selected);
     }
@@ -81,7 +83,7 @@ export function MainPage() {
   }
 
   async function applyIcon() {
-    if (!canApply) {
+    if (!canApply || !window.tintd?.ipcRenderer) {
       return;
     }
 
@@ -89,7 +91,7 @@ export function MainPage() {
     setStatus("Applying folder icon...");
 
     try {
-      const record = await window.tintd.applyIcon({
+      const record = await window.tintd.ipcRenderer.invoke("icons:apply", {
         folderPath: folderPath.trim(),
         color: selectedColor,
         autoRefreshExplorer: settings.autoRefreshExplorer
@@ -105,7 +107,7 @@ export function MainPage() {
   }
 
   async function resetIcon(path: string = folderPath) {
-    if (!path.trim()) {
+    if (!path.trim() || !window.tintd?.ipcRenderer) {
       return;
     }
 
@@ -113,7 +115,7 @@ export function MainPage() {
     setStatus("Resetting folder icon...");
 
     try {
-      const record = await window.tintd.resetIcon(path.trim());
+      const record = await window.tintd.ipcRenderer.invoke("icons:reset", path.trim());
       await refreshHistory();
       setStatus(record.message);
     } catch (error) {
@@ -300,7 +302,7 @@ export function MainPage() {
                 <CardContent>
                   <HistoryList
                     records={history}
-                    onReveal={(path) => window.tintd.revealFolder(path)}
+                    onReveal={(path) => window.tintd?.ipcRenderer.invoke("folders:reveal", path)}
                     onReset={resetIcon}
                   />
                 </CardContent>
