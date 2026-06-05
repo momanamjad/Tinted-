@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 8%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 240 10% 8%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 160 70% 92%;
+    --accent-foreground: 164 86% 18%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 86%;
+    --input: 220 13% 86%;
+    --ring: 160 84% 39%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 10% 6%;
+    --foreground: 0 0% 96%;
+    --card: 240 8% 9%;
+    --card-foreground: 0 0% 96%;
+    --popover: 240 8% 9%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 160 84% 45%;
+    --primary-foreground: 160 90% 8%;
+    --secondary: 220 12% 16%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 220 12% 15%;
+    --muted-foreground: 220 9% 68%;
+    --accent: 190 80% 18%;
+    --accent-foreground: 180 72% 88%;
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 12% 20%;
+    --input: 220 12% 20%;
+    --ring: 160 84% 45%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-width: 1200px;
+    min-height: 800px;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}
