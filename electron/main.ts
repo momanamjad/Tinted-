@@ -7,12 +7,15 @@ import { applyFolderIcon, resetFolderIcon } from "./folder-icons.js";
 import type { ApplyIconRequest, Settings, SettingValue } from "./types.js";
 import { registerIconHandlers } from "./handlers/iconHandlers.js";
 import fs from "node:fs/promises";
+import { FolderWatcher } from "./watchers/folderWatcher.js";
+import { registerWatcherHandlers } from "./handlers/watcherHandlers.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
+let folderWatcher: FolderWatcher;
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -27,11 +30,17 @@ async function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      backgroundThrottling: false
     }
   });
 
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+    if (mainWindow) {
+      folderWatcher.setMainWindow(mainWindow);
+    }
+  });
 
   if (app.isPackaged) {
     await mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
@@ -80,6 +89,7 @@ function registerIpc() {
   });
 
   registerIconHandlers(db);
+  registerWatcherHandlers(db, folderWatcher, () => mainWindow);
 
   ipcMain.handle("icons:apply", async (_event, request: ApplyIconRequest) => {
     const record = await applyFolderIcon(request);
@@ -99,7 +109,7 @@ function registerIpc() {
     try {
       const { execFile } = await import("node:child_process");
       const { promisify } = await import("node:util");
-      await promisify(execFile)("attrib", ["-s", folderPath]);
+      await promisify(execFile)("attrib", ["-r", "-s", folderPath]);
     } catch (e) {}
 
     const customization = db.getFolderCustomization(folderPath);
@@ -115,9 +125,29 @@ function registerIpc() {
 
 app.whenReady().then(async () => {
   log.initialize();
-  db = await AppDatabase.open(app.getPath("userData"));
+  
+  const defaultWatchPaths: string[] = [];
+  try {
+    defaultWatchPaths.push(app.getPath("desktop"));
+  } catch (e) {}
+  try {
+    defaultWatchPaths.push(app.getPath("documents"));
+  } catch (e) {}
+  try {
+    defaultWatchPaths.push(app.getPath("downloads"));
+  } catch (e) {}
+
+  db = await AppDatabase.open(app.getPath("userData"), defaultWatchPaths);
+  folderWatcher = new FolderWatcher(null);
   registerIpc();
   await createWindow();
+
+  // Load watcher settings on boot
+  const wSettings = db.getWatcherSettings();
+  folderWatcher.setAutoStyleDelay(wSettings.autoStyleDelay);
+  if (wSettings.isEnabled) {
+    folderWatcher.start(wSettings.watchPaths);
+  }
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {

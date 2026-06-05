@@ -112,4 +112,68 @@
   .transition-smooth {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
+
+  /* Custom Easing & Animations */
+  @keyframes selectIcon {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    100% { transform: scale(1.1); box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.4); }
+  }
+
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0.5; }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0.5; }
+    to { opacity: 1; }
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes tabFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 8px 0px rgba(16, 185, 129, 0.1); }
+    50% { box-shadow: 0 0 16px 4px rgba(16, 185, 129, 0.3); }
+  }
+
+  .animate-select-icon {
+    animation: selectIcon 200ms ease-out forwards;
+  }
+
+  .preview-update {
+    animation: fadeOut 150ms ease-out forwards,
+               fadeIn 150ms ease-in 150ms forwards;
+  }
+
+  .tab-transition {
+    animation: tabFadeIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  .pulse-glow {
+    animation: pulseGlow 2s infinite ease-in-out;
+  }
+
+  /* Button hover/active scales */
+  .btn-interactive {
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+  }
+  .btn-interactive:hover:not(:disabled) {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .btn-interactive:active:not(:disabled) {
+    transform: scale(0.98);
+  }
 }

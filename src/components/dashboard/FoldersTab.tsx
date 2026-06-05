@@ -236,7 +236,7 @@ export function FoldersTab({
             return (
               <div
                 key={folder.id}
-                className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-3 transition-all duration-200 hover:border-primary/30 hover:bg-card hover:shadow-sm"
+                className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-3 transition-all duration-200 hover:border-primary/30 hover:bg-card hover:-translate-y-0.5 hover:shadow-md"
                 onClick={() => onFolderSelect?.(folder.path, folder.color)}
               >
                 {/* Icon wrapper */}

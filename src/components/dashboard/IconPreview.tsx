@@ -2,6 +2,7 @@ import { Folder } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { ALL_ICONS } from "@/data/icons";
 import { cn } from "@/utils/cn";
+import { adjustBrightness, getContrastColor } from "@/utils/colors";
 
 type IconPreviewProps = {
   color: string;
@@ -47,13 +48,16 @@ export function IconPreview({
   }
 
   // Build folder color variants
-  const darkColor = adjustBrightness(color, -40);
+  const darkColor = getContrastColor(color);
   const lightColor = adjustBrightness(color, 30);
 
   return (
     <div className="space-y-4">
       {/* Large folder preview */}
-      <div className="flex flex-col items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-6">
+      <div 
+        key={`${color}-${selectedIconId}`} 
+        className="flex flex-col items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-6 preview-update transition-all duration-300 hover:border-primary/20 hover:shadow-[0_0_15px_rgba(16,185,129,0.08)]"
+      >
         {/* Folder shape SVG-like CSS */}
         <div className="relative h-28 w-36">
           {/* Tab top */}
@@ -72,12 +76,12 @@ export function IconPreview({
             <div className="flex h-full items-center justify-center">
               {SelectedIcon ? (
                 <SelectedIcon
-                  className="h-8 w-8 opacity-30"
+                  className="h-8 w-8 opacity-85"
                   style={{ color: darkColor }}
                 />
               ) : (
                 <span
-                  className="text-3xl opacity-40 select-none font-sans leading-none"
+                  className="text-3xl opacity-85 select-none font-sans leading-none"
                   style={{ color: darkColor }}
                 >
                   {selectedEmoji}
@@ -129,9 +133,9 @@ export function IconPreview({
                 title={iconName}
                 onClick={() => onIconSelect?.(id)}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 rounded-lg p-1 transition-all duration-150 h-14 w-full",
+                  "flex flex-col items-center justify-center gap-1 rounded-lg p-1 transition-all duration-150 h-14 w-full hover:-translate-y-0.5",
                   isSelected
-                    ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                    ? "bg-primary/15 text-primary ring-1 ring-primary/30 animate-select-icon"
                     : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                 )}
               >
@@ -154,11 +158,3 @@ export function IconPreview({
   );
 }
 
-/** Adjust hex color brightness by amount (-255 to +255) */
-function adjustBrightness(hex: string, amount: number): string {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
-  const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
-  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-}

@@ -212,10 +212,10 @@ export function RightPanel({
       {/* Action Buttons */}
       <div className="border-t border-border/60 bg-card p-4 space-y-3">
         {suggestion && (
-          <div className="rounded-xl border border-primary/25 bg-primary/5 p-3.5 space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 glass pulse-glow p-3.5 space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200 shadow-[0_0_15px_rgba(16,185,129,0.06)]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                <Sparkles className="h-3.5 w-3.5 animate-pulse text-emerald-400" />
                 <span>AI Suggestion</span>
               </div>
               <span className="text-[10px] font-semibold bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
@@ -234,7 +234,7 @@ export function RightPanel({
         )}
         <Button
           id="right-panel-apply-btn"
-          className="w-full gap-2 font-semibold"
+          className="w-full gap-2 font-semibold btn-interactive"
           disabled={!canApply || busy}
           onClick={onApply}
         >
@@ -248,7 +248,7 @@ export function RightPanel({
         <Button
           id="right-panel-remove-btn"
           variant="outline"
-          className="w-full gap-2"
+          className="w-full gap-2 btn-interactive"
           disabled={!canApply || busy}
           onClick={onRemove}
         >

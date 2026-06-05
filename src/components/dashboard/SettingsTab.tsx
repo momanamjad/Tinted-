@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import {
   AlertTriangle,
+  Clock,
   Download,
   Eye,
   FolderOpen,
@@ -64,21 +66,99 @@ function SettingRow({
   );
 }
 
-type WatchedFolder = { id: number; path: string; active: boolean };
-
-const WATCHED_FOLDERS: WatchedFolder[] = [
-  { id: 1, path: "C:\\Users\\DELL\\Projects", active: true },
-  { id: 2, path: "C:\\Users\\DELL\\Documents", active: true },
-  { id: 3, path: "C:\\Users\\DELL\\Downloads", active: false },
-];
-
 type SettingsTabProps = {
   settings: AppSettings;
   onUpdateSetting: (key: keyof AppSettings, value: SettingValue) => void;
 };
 
+function formatRelativeTime(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffSecs < 10) return "just now";
+    if (diffSecs < 60) return `${diffSecs}s ago`;
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  } catch (e) {
+    return "some time ago";
+  }
+}
+
 export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
   const isDark = settings.theme === "dark";
+
+  const [watcherEnabled, setWatcherEnabled] = useState(false);
+  const [watchedFolders, setWatchedFolders] = useState<string[]>([]);
+  const [activity, setActivity] = useState<any[]>([]);
+  const [autoStyleDelay, setAutoStyleDelay] = useState(3);
+  const [loading, setLoading] = useState(true);
+
+  const fetchWatcherStatus = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    try {
+      const status = await window.tintd.ipcRenderer.invoke("watcher:get-status");
+      if (status.success) {
+        setWatcherEnabled(status.isActive);
+        setWatchedFolders(status.watchingPaths || []);
+        setActivity(status.activity || []);
+        if (status.autoStyleDelay !== undefined) {
+          setAutoStyleDelay(Math.round(status.autoStyleDelay / 1000));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch watcher status:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWatcherStatus();
+    // Poll logs every 5 seconds to keep dashboard active in background
+    const interval = setInterval(fetchWatcherStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleWatcher = async (checked: boolean) => {
+    if (!window.tintd?.ipcRenderer) return;
+    setWatcherEnabled(checked);
+    if (checked) {
+      await window.tintd.ipcRenderer.invoke("watcher:start", watchedFolders);
+    } else {
+      await window.tintd.ipcRenderer.invoke("watcher:stop");
+    }
+    fetchWatcherStatus();
+  };
+
+  const removeWatchedFolder = async (pathToRemove: string) => {
+    if (!window.tintd?.ipcRenderer) return;
+    const updated = watchedFolders.filter((p) => p !== pathToRemove);
+    setWatchedFolders(updated);
+    await window.tintd.ipcRenderer.invoke("watcher:stop", pathToRemove);
+    fetchWatcherStatus();
+  };
+
+  const addWatchedFolder = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    const selectedPath = await window.tintd.ipcRenderer.invoke("watcher:select-directory");
+    if (!selectedPath) return;
+
+    if (watchedFolders.includes(selectedPath)) {
+      return;
+    }
+
+    const updated = [...watchedFolders, selectedPath];
+    setWatchedFolders(updated);
+    await window.tintd.ipcRenderer.invoke("watcher:start", updated);
+    setWatcherEnabled(true);
+    fetchWatcherStatus();
+  };
 
   return (
     <div className="flex h-full flex-col gap-5 overflow-auto pb-4">
@@ -141,9 +221,37 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
             icon={FolderSearch}
             label="Folder Watcher"
             description="Watch folders for changes and re-apply icons automatically"
-            checked={settings.autoRefreshExplorer}
-            onCheckedChange={(v) => onUpdateSetting("autoRefreshExplorer", v)}
+            checked={watcherEnabled}
+            onCheckedChange={handleToggleWatcher}
           />
+          {watcherEnabled && (
+            <div className="rounded-xl border border-border/60 bg-background/20 p-4 transition-all duration-200 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="settings-style-delay" className="text-xs font-semibold text-foreground">
+                  Auto-style delay: {autoStyleDelay}s
+                </Label>
+                <span className="text-xs text-primary font-mono font-semibold">{autoStyleDelay}s</span>
+              </div>
+              <input
+                id="settings-style-delay"
+                type="range"
+                min="1"
+                max="10"
+                value={autoStyleDelay}
+                onChange={async (e) => {
+                  const val = Number(e.target.value);
+                  setAutoStyleDelay(val);
+                  if (window.tintd?.ipcRenderer) {
+                    await window.tintd.ipcRenderer.invoke("watcher:set-delay", val);
+                  }
+                }}
+                className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">
+                Wait time before auto-styling new folders (gives you time to finish typing the folder name).
+              </p>
+            </div>
+          )}
           <SettingRow
             id="settings-auto-apply"
             icon={Wand2}
@@ -177,40 +285,121 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
                 Folders being monitored for automatic icon management
               </CardDescription>
             </div>
-            <Button id="settings-add-watched" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+            <Button
+              id="settings-add-watched"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs text-primary hover:text-primary-foreground border-primary/30"
+              onClick={addWatchedFolder}
+            >
               <Plus className="h-3.5 w-3.5" />
               Add Folder
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          {WATCHED_FOLDERS.map((folder) => (
-            <div
-              key={folder.id}
-              className="flex items-center gap-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2.5"
-            >
-              <div
-                className={cn(
-                  "h-2 w-2 flex-shrink-0 rounded-full",
-                  folder.active ? "bg-primary" : "bg-muted-foreground/40"
-                )}
-              />
-              <p className="flex-1 truncate font-mono text-[12px] text-foreground">{folder.path}</p>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                  folder.active
-                    ? "bg-primary/10 text-primary"
-                    : "bg-secondary text-muted-foreground"
-                )}
-              >
-                {folder.active ? "Active" : "Paused"}
-              </span>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                <X className="h-3.5 w-3.5" />
-              </Button>
+          {watcherEnabled && watchedFolders.length > 0 && (
+            <p className="text-xs text-emerald-400 font-medium pb-1">
+              ✓ Active (monitoring {watchedFolders.length} locations)
+            </p>
+          )}
+          {!watcherEnabled && watchedFolders.length > 0 && (
+            <p className="text-xs text-amber-500 font-medium pb-1">
+              ⚠️ Watcher is disabled (toggle Folder Watcher under Behavior to resume)
+            </p>
+          )}
+          {watchedFolders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 border border-dashed border-border/60 rounded-xl bg-card/20 text-center">
+              <FolderOpen className="h-8 w-8 text-muted-foreground/50 mb-2" />
+              <p className="text-xs text-muted-foreground">No folders watched yet.</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">Click Add Folder to monitor a folder.</p>
             </div>
-          ))}
+          ) : (
+            watchedFolders.map((path) => (
+              <div
+                key={path}
+                className="flex items-center gap-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 transition-colors hover:border-primary/20"
+              >
+                <div
+                  className={cn(
+                    "h-2 w-2 flex-shrink-0 rounded-full",
+                    watcherEnabled ? "bg-emerald-400" : "bg-amber-500/40"
+                  )}
+                />
+                <p className="flex-1 truncate font-mono text-[12px] text-foreground" title={path}>{path}</p>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    watcherEnabled
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : "bg-secondary text-muted-foreground"
+                  )}
+                >
+                  {watcherEnabled ? "Active" : "Paused"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeWatchedFolder(path)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section: Watcher Activity Log */}
+      <Card className="border-border/60 bg-card/40">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-semibold">Watcher Activity Log</CardTitle>
+          </div>
+          <CardDescription className="text-[12px]">
+            Recent background auto-styling operations
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {activity.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 border border-dashed border-border/60 rounded-xl bg-card/20 text-center">
+              <Clock className="h-8 w-8 text-muted-foreground/50 mb-2" />
+              <p className="text-xs text-muted-foreground">No recent activity.</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">Watcher activity logs will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {activity.map((log) => (
+                <div key={log.id} className="flex flex-col gap-1 rounded-lg border border-border/40 bg-background/40 p-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-foreground truncate max-w-[250px]" title={log.folderPath}>
+                      {log.folderName}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {formatRelativeTime(log.timestamp)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-muted-foreground mt-0.5">
+                    <span>
+                      {log.status === "success" ? (
+                        <span className="text-emerald-400 font-medium">✓ Auto-styled with {log.suggestedIcon}</span>
+                      ) : log.status === "skipped" ? (
+                        <span className="text-amber-400">💡 Suggestion: {log.suggestedIcon} ({log.confidence}% confidence)</span>
+                      ) : (
+                        <span className="text-red-400">✗ Failed to auto-style</span>
+                      )}
+                    </span>
+                    <span className="font-mono text-[10px] flex items-center gap-1.5" style={{ color: log.appliedColor }}>
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: log.appliedColor }} />
+                      {log.appliedColor}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

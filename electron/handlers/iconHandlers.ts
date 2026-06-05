@@ -79,8 +79,11 @@ export function registerIconHandlers(db: any) {
         }
       }
 
+      // Wait 500ms to let the OS flush attributes and desktop.ini changes
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Notify the Windows Shell to refresh the icon instantly
-      await refreshWindowsShell();
+      await refreshWindowsShell(folderPath);
 
       // 9. Auto refresh Explorer by revealing the item in folder
       const settings = db.getSettings();
@@ -137,8 +140,11 @@ export function registerIconHandlers(db: any) {
       // 5. Delete entry from SQLite
       db.removeFolderCustomization(folderPath);
 
+      // Wait 500ms to let the OS flush attributes and desktop.ini changes
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Notify Windows Shell to refresh
-      await refreshWindowsShell();
+      await refreshWindowsShell(folderPath);
 
       return { success: true, message: "Icon removed successfully!" };
     } catch (error: any) {

@@ -15,15 +15,16 @@ export class AppDatabase {
   private db: SqlDatabase;
   private dbPath: string;
 
-  private constructor(userDataPath: string, db: SqlDatabase) {
+  private constructor(userDataPath: string, db: SqlDatabase, defaultWatchPaths: string[]) {
     fs.mkdirSync(userDataPath, { recursive: true });
     this.dbPath = path.join(userDataPath, "tintd-pro.sqlite");
     this.db = db;
     this.migrate();
     this.ensureDefaults();
+    this.ensureWatcherDefaults(defaultWatchPaths);
   }
 
-  static async open(userDataPath: string) {
+  static async open(userDataPath: string, defaultWatchPaths: string[] = []) {
     fs.mkdirSync(userDataPath, { recursive: true });
     const dbPath = path.join(userDataPath, "tintd-pro.sqlite");
     const SQL = await initSqlJs();
@@ -31,7 +32,7 @@ export class AppDatabase {
       ? new SQL.Database(fs.readFileSync(dbPath))
       : new SQL.Database();
 
-    return new AppDatabase(userDataPath, db);
+    return new AppDatabase(userDataPath, db, defaultWatchPaths);
   }
 
   getSettings(): Settings {
@@ -182,7 +183,120 @@ export class AppDatabase {
         appliedDate TEXT NOT NULL,
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS watcher_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        isEnabled INTEGER DEFAULT 0,
+        watchPaths TEXT NOT NULL,
+        autoStyleDelay INTEGER DEFAULT 3000,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS watcher_activity (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folderPath TEXT NOT NULL,
+        folderName TEXT NOT NULL,
+        suggestedIcon TEXT NOT NULL,
+        appliedColor TEXT NOT NULL,
+        confidence INTEGER NOT NULL,
+        timestamp TEXT NOT NULL,
+        status TEXT NOT NULL
+      );
     `);
+
+    try {
+      this.db.exec("ALTER TABLE watcher_settings ADD COLUMN autoStyleDelay INTEGER DEFAULT 3000;");
+    } catch (e) {
+      // ignore if column already exists
+    }
+  }
+
+  private ensureWatcherDefaults(defaultPaths: string[]) {
+    const row = this.get("SELECT id FROM watcher_settings LIMIT 1");
+    if (!row) {
+      this.run(
+        "INSERT INTO watcher_settings (isEnabled, watchPaths, autoStyleDelay) VALUES (:isEnabled, :watchPaths, :autoStyleDelay)",
+        {
+          ":isEnabled": 0,
+          ":watchPaths": JSON.stringify(defaultPaths),
+          ":autoStyleDelay": 3000
+        }
+      );
+      this.persist();
+    }
+  }
+
+  getWatcherSettings(): { isEnabled: boolean; watchPaths: string[]; autoStyleDelay: number } {
+    const row = this.get<{ isEnabled: number; watchPaths: string; autoStyleDelay: number }>(
+      "SELECT isEnabled, watchPaths, autoStyleDelay FROM watcher_settings LIMIT 1"
+    );
+    if (row) {
+      return {
+        isEnabled: row.isEnabled === 1,
+        watchPaths: JSON.parse(row.watchPaths) as string[],
+        autoStyleDelay: row.autoStyleDelay !== undefined ? row.autoStyleDelay : 3000
+      };
+    }
+    return { isEnabled: false, watchPaths: [], autoStyleDelay: 3000 };
+  }
+
+  setWatcherEnabled(isEnabled: boolean) {
+    this.run(
+      "UPDATE watcher_settings SET isEnabled = :isEnabled, updatedAt = CURRENT_TIMESTAMP",
+      { ":isEnabled": isEnabled ? 1 : 0 }
+    );
+    this.persist();
+  }
+
+  setWatcherPaths(watchPaths: string[]) {
+    this.run(
+      "UPDATE watcher_settings SET watchPaths = :watchPaths, updatedAt = CURRENT_TIMESTAMP",
+      { ":watchPaths": JSON.stringify(watchPaths) }
+    );
+    this.persist();
+  }
+
+  setWatcherDelay(delayMs: number) {
+    this.run(
+      "UPDATE watcher_settings SET autoStyleDelay = :delayMs, updatedAt = CURRENT_TIMESTAMP",
+      { ":delayMs": delayMs }
+    );
+    this.persist();
+  }
+
+  getWatcherActivity(limit = 10): any[] {
+    return this.all<any>(
+      `SELECT id, folderPath, folderName, suggestedIcon, appliedColor, confidence, timestamp, status
+       FROM watcher_activity
+       ORDER BY datetime(timestamp) DESC
+       LIMIT :limit`,
+      { ":limit": limit }
+    );
+  }
+
+  addWatcherActivity(activity: {
+    folderPath: string;
+    folderName: string;
+    suggestedIcon: string;
+    appliedColor: string;
+    confidence: number;
+    status: string;
+  }) {
+    this.run(
+      `INSERT INTO watcher_activity (folderPath, folderName, suggestedIcon, appliedColor, confidence, timestamp, status)
+       VALUES (:folderPath, :folderName, :suggestedIcon, :appliedColor, :confidence, :timestamp, :status)`,
+      {
+        ":folderPath": activity.folderPath,
+        ":folderName": activity.folderName,
+        ":suggestedIcon": activity.suggestedIcon,
+        ":appliedColor": activity.appliedColor,
+        ":confidence": activity.confidence,
+        ":timestamp": new Date().toISOString(),
+        ":status": activity.status
+      }
+    );
+    this.persist();
   }
 
   private ensureDefaults() {

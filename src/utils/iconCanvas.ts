@@ -2,15 +2,7 @@ import * as LucideIcons from "lucide-react";
 import { ALL_ICONS } from "@/data/icons";
 import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
-
-// Adjust hex color brightness
-function adjustBrightness(hex: string, amount: number): string {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
-  const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
-  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-}
+import { adjustBrightness, getContrastColor } from "@/utils/colors";
 
 export async function drawFolderIconToCanvas(
   color: string,
@@ -23,7 +15,7 @@ export async function drawFolderIconToCanvas(
   if (!ctx) throw new Error("Could not get 2D context");
 
   const baseColor = color;
-  const darkColor = adjustBrightness(color, -40); // Darker contrast for the icon overlay
+  const darkColor = getContrastColor(color); // Highly visible contrasting color
   const lightColor = adjustBrightness(color, 30);
 
   // Helper to draw a rounded rect
@@ -87,7 +79,7 @@ export async function drawFolderIconToCanvas(
 
           await new Promise<void>((resolve) => {
             img.onload = () => {
-              ctx.globalAlpha = 0.8; // Thicker, 80% opacity for better contrast
+              ctx.globalAlpha = 1.0; // Fully opaque for maximum visibility and sharpness
               ctx.drawImage(img, 134 - 28, 165 - 28, 56, 56);
               ctx.globalAlpha = 1.0;
               URL.revokeObjectURL(url);

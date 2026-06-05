@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Clock, FolderOpen, Grid3x3, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Clock, FolderOpen, Grid3x3, PanelLeftClose, PanelLeftOpen, Settings, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sidebar, type ActiveTab } from "@/components/dashboard/Sidebar";
 import { FoldersTab } from "@/components/dashboard/FoldersTab";
@@ -56,8 +56,157 @@ export function MainContent() {
     reason: string;
     confidence: number;
   } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "error"; iconId?: string } | null>(null);
+  const [isBgStyling, setIsBgStyling] = useState(false);
 
   const triggerRefresh = () => setHistoryVersion((v) => v + 1);
+
+  useEffect(() => {
+    if (!window.tintd?.ipcRenderer) return;
+
+    if ((window as any).__watcherRegistered) {
+      return;
+    }
+
+    (window as any).__watcherRegistered = true;
+
+    window.tintd.ipcRenderer.on(
+      "watcher:new-folder",
+      async (_event, data: { folderPath: string; folderName: string }) => {
+        const { folderPath, folderName } = data;
+        setIsBgStyling(true);
+
+        try {
+          const match = matchIconToFolderName(folderName, ALL_ICONS);
+          if (!match) return;
+
+          const color = suggestComplementaryColor(match.icon);
+
+          if (match.confidence >= 75) {
+            // Auto-style!
+            const { pixels, dataUrl } = await drawFolderIconToCanvas(color, match.icon.id);
+
+            const result = await window.tintd.ipcRenderer.invoke("applyFolderIcon", {
+              folderPath,
+              canvasImageData: Array.from(pixels),
+              canvasDataUrl: dataUrl,
+              selectedIcon: match.icon.id,
+              selectedColor: color,
+            });
+
+            if (result.success) {
+              await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
+                folderPath,
+                folderName,
+                suggestedIcon: match.icon.name,
+                appliedColor: color,
+                confidence: match.confidence,
+                status: "success"
+              });
+
+              // Show visual toast
+              setToast({
+                message: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
+                type: "info",
+                iconId: match.icon.id
+              });
+              setTimeout(() => setToast(null), 5000);
+
+              // Show native OS notification
+              if (Notification.permission === "granted") {
+                new Notification("Folder Auto-Styled", {
+                  body: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
+                });
+              } else if (Notification.permission !== "denied") {
+                Notification.requestPermission().then((permission) => {
+                  if (permission === "granted") {
+                    new Notification("Folder Auto-Styled", {
+                      body: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
+                    });
+                  }
+                });
+              }
+
+              triggerRefresh();
+            } else {
+              await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
+                folderPath,
+                folderName,
+                suggestedIcon: match.icon.name,
+                appliedColor: color,
+                confidence: match.confidence,
+                status: "error"
+              });
+            }
+          } else if (match.confidence >= 50) {
+            // Suggestion only (weak match)
+            await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
+              folderPath,
+              folderName,
+              suggestedIcon: match.icon.name,
+              appliedColor: color,
+              confidence: match.confidence,
+              status: "skipped"
+            });
+            triggerRefresh();
+          }
+        } catch (err: any) {
+          console.error("Folder watcher auto-styling error:", err);
+        } finally {
+          setIsBgStyling(false);
+        }
+      }
+    );
+
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore shortcut key bindings if typing in fields
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        if (!(e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l")) {
+          return;
+        }
+      }
+
+      if (e.ctrlKey && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        const browseBtn = document.getElementById("folders-browse-btn");
+        if (browseBtn) browseBtn.click();
+      } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        setActiveTab("library");
+        setTimeout(() => {
+          const searchInput = document.getElementById("library-search") || document.getElementById("right-panel-icon-search");
+          if (searchInput) (searchInput as HTMLInputElement).focus();
+        }, 100);
+      } else if (e.ctrlKey && e.key === ",") {
+        e.preventDefault();
+        setActiveTab("settings");
+      } else if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
+        const applyBtn = document.getElementById("right-panel-apply-btn");
+        if (applyBtn && !applyBtn.getAttribute("disabled")) {
+          e.preventDefault();
+          applyBtn.click();
+        }
+      } else if (e.key === "Delete") {
+        const removeBtn = document.getElementById("right-panel-remove-btn");
+        if (removeBtn && !removeBtn.getAttribute("disabled")) {
+          e.preventDefault();
+          removeBtn.click();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedFolderPath, selectedColor, selectedIconId, busy]);
 
   const meta = TAB_META[activeTab];
   const Icon = meta.icon;
@@ -80,11 +229,23 @@ export function MainContent() {
       if (result.success) {
         await updateSetting("lastColor", selectedColor as AppSettings["lastColor"]);
         triggerRefresh();
+        setToast({
+          message: `Successfully applied icon to ${selectedFolderPath.split("\\").pop() || "folder"}!`,
+          type: "success",
+          iconId: selectedIconId
+        });
+        setTimeout(() => setToast(null), 4000);
       } else {
-        alert("Error applying icon: " + result.error);
+        setToast({
+          message: `Error applying icon: ${result.error}`,
+          type: "error"
+        });
       }
     } catch (err: any) {
-      alert("Failed to apply icon: " + err.message);
+      setToast({
+        message: `Failed to apply icon: ${err.message}`,
+        type: "error"
+      });
     } finally {
       setBusy(false);
     }
@@ -98,11 +259,23 @@ export function MainContent() {
       const result = await window.tintd.ipcRenderer.invoke("removeFolderIcon", selectedFolderPath);
       if (result.success) {
         triggerRefresh();
+        setToast({
+          message: `Reverted folder icon to Windows system default.`,
+          type: "success",
+          iconId: "folder"
+        });
+        setTimeout(() => setToast(null), 4000);
       } else {
-        alert("Error removing icon: " + result.error);
+        setToast({
+          message: `Error removing icon: ${result.error}`,
+          type: "error"
+        });
       }
     } catch (err: any) {
-      alert("Failed to remove icon: " + err.message);
+      setToast({
+        message: `Failed to remove icon: ${err.message}`,
+        type: "error"
+      });
     } finally {
       setBusy(false);
     }
@@ -196,6 +369,12 @@ export function MainContent() {
           </div>
 
           <div className="flex items-center gap-2">
+            {isBgStyling && (
+              <Badge variant="outline" className="border-primary/40 text-primary animate-pulse flex items-center gap-1.5 text-[10px] bg-primary/5 mr-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Auto-styling...</span>
+              </Badge>
+            )}
             <Badge
               variant="outline"
               className="hidden border-primary/30 text-[10px] text-primary sm:flex"
@@ -222,7 +401,7 @@ export function MainContent() {
               </div>
             </div>
           )}
-          <div className="flex-1 overflow-hidden">
+          <div key={activeTab} className="flex-1 overflow-hidden tab-transition">
             {activeTab === "folders" && (
               <FoldersTab
                 selectedFolderPath={selectedFolderPath}
@@ -262,6 +441,44 @@ export function MainContent() {
         busy={busy}
         suggestion={suggestion}
       />
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className={`flex items-start gap-3.5 px-4.5 py-4 rounded-xl border shadow-xl backdrop-blur-md max-w-sm ${
+            toast.type === "success"
+              ? "bg-emerald-950/85 border-emerald-500/35 text-emerald-100 shadow-emerald-950/20"
+              : toast.type === "error"
+              ? "bg-rose-950/85 border-rose-500/35 text-rose-100 shadow-rose-950/20"
+              : "bg-cyan-950/85 border-cyan-500/35 text-cyan-100 shadow-cyan-950/20"
+          }`}>
+            {toast.iconId && (
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white/10 text-white font-sans text-base">
+                {toast.iconId === "folder" ? "📁" : toast.iconId.startsWith("emoji-") 
+                  ? ALL_ICONS.find(i => i.id === toast.iconId)?.emoji || "💡"
+                  : <Sparkles className="h-4 w-4" />
+                }
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h4 className="text-[10px] font-bold uppercase tracking-wider opacity-85">
+                {toast.type === "success" ? "✓ Icon Applied" : toast.type === "error" ? "✗ Error" : "✓ Auto-Styled"}
+              </h4>
+              <p className="text-xs font-semibold mt-0.5 leading-snug">{toast.message}</p>
+            </div>
+            {toast.type === "error" ? (
+              <button 
+                onClick={() => setToast(null)} 
+                className="px-2 py-1 bg-white/15 hover:bg-white/25 text-[9px] font-bold rounded uppercase tracking-wider text-white transition ml-2 self-center"
+              >
+                Dismiss
+              </button>
+            ) : (
+              <button onClick={() => setToast(null)} className="text-white/45 hover:text-white text-xs ml-2 self-start leading-none mt-0.5">✕</button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
