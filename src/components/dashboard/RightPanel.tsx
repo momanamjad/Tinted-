@@ -27,6 +27,13 @@ type RightPanelProps = {
   onApply?: () => void;
   onRemove?: () => void;
   busy?: boolean;
+  suggestion?: {
+    iconId: string;
+    iconName: string;
+    color: string;
+    reason: string;
+    confidence: number;
+  } | null;
 };
 
 export function RightPanel({
@@ -38,6 +45,7 @@ export function RightPanel({
   onApply,
   onRemove,
   busy = false,
+  suggestion = null,
 }: RightPanelProps) {
   const [iconSearch, setIconSearch] = useState("");
   const [colorSectionOpen, setColorSectionOpen] = useState(true);
@@ -202,7 +210,28 @@ export function RightPanel({
       </div>
 
       {/* Action Buttons */}
-      <div className="border-t border-border/60 bg-card p-4 space-y-2.5">
+      <div className="border-t border-border/60 bg-card p-4 space-y-3">
+        {suggestion && (
+          <div className="rounded-xl border border-primary/25 bg-primary/5 p-3.5 space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                <span>AI Suggestion</span>
+              </div>
+              <span className="text-[10px] font-semibold bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
+                {suggestion.confidence}% Match
+              </span>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">
+                Suggesting {suggestion.iconName} with {suggestion.color.toUpperCase()}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                {suggestion.reason}
+              </p>
+            </div>
+          </div>
+        )}
         <Button
           id="right-panel-apply-btn"
           className="w-full gap-2 font-semibold"

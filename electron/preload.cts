@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
 
 contextBridge.exposeInMainWorld("tintd", {
   ipcRenderer: {
@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld("tintd", {
       ipcRenderer.on(channel, listener),
     send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
   },
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 });

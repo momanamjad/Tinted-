@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import type { Settings as AppSettings } from "@/types";
 import { useTintdSettings } from "@/hooks/useTintdSettings";
 import { drawFolderIconToCanvas } from "@/utils/iconCanvas";
+import { ALL_ICONS } from "@/data/icons";
+import { matchIconToFolderName, suggestComplementaryColor } from "@/utils/iconMatcher";
 
 const TAB_META: Record<
   ActiveTab,
@@ -47,6 +49,13 @@ export function MainContent() {
   const [selectedFolderPath, setSelectedFolderPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [historyVersion, setHistoryVersion] = useState(0);
+  const [suggestion, setSuggestion] = useState<{
+    iconId: string;
+    iconName: string;
+    color: string;
+    reason: string;
+    confidence: number;
+  } | null>(null);
 
   const triggerRefresh = () => setHistoryVersion((v) => v + 1);
 
@@ -99,9 +108,50 @@ export function MainContent() {
     }
   }
 
-  function handleFolderSelect(path: string, color: string) {
+  async function handleFolderSelect(path: string, color: string) {
     setSelectedFolderPath(path);
-    setSelectedColor(color);
+
+    if (!path.trim()) {
+      setSuggestion(null);
+      return;
+    }
+
+    // Check if the folder is already customized in history
+    let existingCustomization = null;
+    if (window.tintd?.ipcRenderer) {
+      try {
+        const history = await window.tintd.ipcRenderer.invoke("icons:history");
+        existingCustomization = history.find((h: any) => h.folderPath === path);
+      } catch (e) {
+        console.error("Failed to query customizations history:", e);
+      }
+    }
+
+    if (existingCustomization) {
+      setSelectedColor(existingCustomization.color);
+      setSelectedIconId(existingCustomization.iconId || "folder");
+      setSuggestion(null); // No suggestion for already customized folders
+    } else {
+      const folderName = path.split("\\").pop() || "Folder";
+      const matched = matchIconToFolderName(folderName, ALL_ICONS);
+
+      if (matched) {
+        const suggestedColor = suggestComplementaryColor(matched.icon);
+        setSelectedColor(suggestedColor);
+        setSelectedIconId(matched.icon.id);
+        setSuggestion({
+          iconId: matched.icon.id,
+          iconName: matched.icon.name,
+          color: suggestedColor,
+          reason: matched.reasoning,
+          confidence: matched.confidence
+        });
+      } else {
+        setSelectedColor(color || settings.lastColor);
+        setSelectedIconId("folder");
+        setSuggestion(null);
+      }
+    }
   }
 
   return (
@@ -210,6 +260,7 @@ export function MainContent() {
         onApply={handleApply}
         onRemove={handleRemove}
         busy={busy}
+        suggestion={suggestion}
       />
     </div>
   );

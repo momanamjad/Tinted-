@@ -82,8 +82,17 @@ export function FoldersTab({
     e.preventDefault();
     setIsDragOver(false);
     const files = e.dataTransfer.files;
-    if (files && files[0] && (files[0] as any).path) {
-      onFolderSelect?.((files[0] as any).path, "#3b82f6");
+    if (files && files[0]) {
+      let filePath = "";
+      if (window.tintd?.getPathForFile) {
+        filePath = window.tintd.getPathForFile(files[0]);
+      } else {
+        filePath = (files[0] as any).path || "";
+      }
+
+      if (filePath) {
+        onFolderSelect?.(filePath, "#3b82f6");
+      }
     }
   };
 
