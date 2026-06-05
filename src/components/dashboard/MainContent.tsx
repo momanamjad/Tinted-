@@ -10,6 +10,7 @@ import { RightPanel } from "@/components/dashboard/RightPanel";
 import { Badge } from "@/components/ui/badge";
 import type { Settings as AppSettings } from "@/types";
 import { useTintdSettings } from "@/hooks/useTintdSettings";
+import { drawFolderIconToCanvas } from "@/utils/iconCanvas";
 
 const TAB_META: Record<
   ActiveTab,
@@ -45,6 +46,9 @@ export function MainContent() {
   const [selectedIconId, setSelectedIconId] = useState("folder");
   const [selectedFolderPath, setSelectedFolderPath] = useState("");
   const [busy, setBusy] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
+
+  const triggerRefresh = () => setHistoryVersion((v) => v + 1);
 
   const meta = TAB_META[activeTab];
   const Icon = meta.icon;
@@ -54,14 +58,24 @@ export function MainContent() {
     setBusy(true);
     try {
       if (!window.tintd?.ipcRenderer) throw new Error("IPC not available");
-      await window.tintd.ipcRenderer.invoke("icons:apply", {
+      const { pixels, dataUrl } = await drawFolderIconToCanvas(selectedColor, selectedIconId);
+      
+      const result = await window.tintd.ipcRenderer.invoke("applyFolderIcon", {
         folderPath: selectedFolderPath,
-        color: selectedColor,
-        autoRefreshExplorer: settings.autoRefreshExplorer,
+        canvasImageData: Array.from(pixels),
+        canvasDataUrl: dataUrl,
+        selectedIcon: selectedIconId,
+        selectedColor: selectedColor,
       });
-      await updateSetting("lastColor", selectedColor as AppSettings["lastColor"]);
-    } catch {
-      // ignore for now
+
+      if (result.success) {
+        await updateSetting("lastColor", selectedColor as AppSettings["lastColor"]);
+        triggerRefresh();
+      } else {
+        alert("Error applying icon: " + result.error);
+      }
+    } catch (err: any) {
+      alert("Failed to apply icon: " + err.message);
     } finally {
       setBusy(false);
     }
@@ -72,9 +86,14 @@ export function MainContent() {
     setBusy(true);
     try {
       if (!window.tintd?.ipcRenderer) throw new Error("IPC not available");
-      await window.tintd.ipcRenderer.invoke("icons:reset", selectedFolderPath);
-    } catch {
-      // ignore
+      const result = await window.tintd.ipcRenderer.invoke("removeFolderIcon", selectedFolderPath);
+      if (result.success) {
+        triggerRefresh();
+      } else {
+        alert("Error removing icon: " + result.error);
+      }
+    } catch (err: any) {
+      alert("Failed to remove icon: " + err.message);
     } finally {
       setBusy(false);
     }
@@ -140,10 +159,27 @@ export function MainContent() {
         </header>
 
         {/* Tab content */}
-        <main className="flex-1 overflow-hidden p-5">
-          <div className="h-full">
+        <main className="flex-1 overflow-hidden p-5 flex flex-col gap-4">
+          {!window.tintd?.ipcRenderer && (
+            <div className="flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-500 shadow-sm backdrop-blur-md">
+              <Clock className="h-5 w-5 flex-shrink-0 animate-pulse" /> {/* Reuse Clock or import AlertTriangle */}
+              <div className="flex-1">
+                <p className="font-semibold text-yellow-400">Running in Web Browser Mode</p>
+                <p className="mt-0.5 text-xs text-yellow-500/80">
+                  Native Windows folder browsing, drag & drop, and icon generation require the desktop wrapper.
+                  Please launch using <strong>npm run dev</strong> and use the desktop window.
+                </p>
+              </div>
+            </div>
+          )}
+          <div className="flex-1 overflow-hidden">
             {activeTab === "folders" && (
-              <FoldersTab onFolderSelect={handleFolderSelect} />
+              <FoldersTab
+                selectedFolderPath={selectedFolderPath}
+                onFolderSelect={handleFolderSelect}
+                refreshTrigger={historyVersion}
+                onRefreshNeeded={triggerRefresh}
+              />
             )}
             {activeTab === "library" && (
               <LibraryTab
@@ -151,7 +187,9 @@ export function MainContent() {
                 selectedIcon={selectedIconId}
               />
             )}
-            {activeTab === "recent" && <RecentTab />}
+            {activeTab === "recent" && (
+              <RecentTab refreshTrigger={historyVersion} />
+            )}
             {activeTab === "settings" && (
               <SettingsTab
                 settings={settings}

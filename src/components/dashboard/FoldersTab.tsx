@@ -1,103 +1,149 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Camera,
   CheckCircle2,
   ChevronRight,
-  Code2,
-  FolderHeart,
   FolderOpen,
-  Headphones,
-  ImageIcon,
+  FolderHeart,
   MoreHorizontal,
-  Music,
   RotateCcw,
   Star,
-  Trash2,
   Upload,
-  Video,
+  X,
 } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
-
-const RECENT_FOLDERS = [
-  {
-    id: 1,
-    name: "Projects",
-    path: "C:\\Users\\DELL\\Projects",
-    color: "#3b82f6",
-    icon: Code2,
-    applied: true,
-    date: "2 hours ago",
-  },
-  {
-    id: 2,
-    name: "Photos",
-    path: "C:\\Users\\DELL\\Photos",
-    color: "#ec4899",
-    icon: Camera,
-    applied: true,
-    date: "Yesterday",
-  },
-  {
-    id: 3,
-    name: "Music",
-    path: "C:\\Users\\DELL\\Music",
-    color: "#8b5cf6",
-    icon: Music,
-    applied: false,
-    date: "3 days ago",
-  },
-  {
-    id: 4,
-    name: "Videos",
-    path: "C:\\Users\\DELL\\Videos",
-    color: "#f97316",
-    icon: Video,
-    applied: true,
-    date: "Last week",
-  },
-  {
-    id: 5,
-    name: "Downloads",
-    path: "C:\\Users\\DELL\\Downloads",
-    color: "#22c55e",
-    icon: ImageIcon,
-    applied: false,
-    date: "Last week",
-  },
-];
+import { ALL_ICONS } from "@/data/icons";
 
 type FoldersTabProps = {
+  selectedFolderPath?: string;
   onFolderSelect?: (path: string, color: string) => void;
+  refreshTrigger?: number;
+  onRefreshNeeded?: () => void;
 };
 
-export function FoldersTab({ onFolderSelect }: FoldersTabProps) {
+export function FoldersTab({
+  selectedFolderPath = "",
+  onFolderSelect,
+  refreshTrigger = 0,
+  onRefreshNeeded,
+}: FoldersTabProps) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const [folders, setFolders] = useState(RECENT_FOLDERS);
+  const [folders, setFolders] = useState<any[]>([]);
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+
+  useEffect(() => {
+    loadFolders();
+  }, [refreshTrigger]);
+
+  async function loadFolders() {
+    if (!window.tintd?.ipcRenderer) return;
+    try {
+      const history = await window.tintd.ipcRenderer.invoke("icons:history");
+      const list = history.map((record: any) => ({
+        id: record.id,
+        name: record.folderPath.split("\\").pop() || "Folder",
+        path: record.folderPath,
+        color: record.color,
+        iconId: record.iconId,
+        applied: record.status === "applied",
+        date: formatDateRelative(record.updatedAt),
+      }));
+      setFolders(list);
+    } catch (err) {
+      console.error("Failed to load customized folders:", err);
+    }
+  }
+
+  function formatDateRelative(dateStr: string) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return "Yesterday";
+    return `${diffDays} days ago`;
+  }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
   };
+
   const handleDragLeave = () => setIsDragOver(false);
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files && files[0] && (files[0] as any).path) {
+      onFolderSelect?.((files[0] as any).path, "#3b82f6");
+    }
   };
 
-  const handleRemove = (id: number) => {
-    setFolders((prev) => prev.filter((f) => f.id !== id));
+  const handleBrowse = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    const selected = await window.tintd.ipcRenderer.invoke("folders:select");
+    if (selected) {
+      onFolderSelect?.(selected, "#3b82f6");
+    }
+  };
+
+  const handleReset = async (folderPath: string) => {
+    if (!window.tintd?.ipcRenderer) return;
+    try {
+      const result = await window.tintd.ipcRenderer.invoke("removeFolderIcon", folderPath);
+      if (result.success) {
+        onRefreshNeeded?.();
+        loadFolders();
+      } else {
+        alert("Error resetting: " + result.error);
+      }
+    } catch (err: any) {
+      alert("Failed to reset: " + err.message);
+    }
     setMenuOpenId(null);
   };
 
   return (
     <div className="flex h-full flex-col gap-5 overflow-auto pb-4">
+      {selectedFolderPath && (
+        <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <FolderOpen className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/80">Selected Folder</p>
+            <p className="truncate text-sm font-bold text-foreground mt-0.5">
+              {selectedFolderPath.split("\\").pop() || "Folder"}
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground mt-0.5" title={selectedFolderPath}>
+              {selectedFolderPath}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => onFolderSelect?.("", "#3b82f6")}
+            title="Clear selection"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* Drop Zone */}
       <div
         id="folders-drop-zone"
         onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
@@ -138,6 +184,7 @@ export function FoldersTab({ onFolderSelect }: FoldersTabProps) {
           variant="outline"
           size="sm"
           className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/5"
+          onClick={handleBrowse}
         >
           <FolderOpen className="h-4 w-4 text-primary" />
           Browse Folders
@@ -161,22 +208,41 @@ export function FoldersTab({ onFolderSelect }: FoldersTabProps) {
 
         <div className="space-y-2">
           {folders.map((folder) => {
-            const Icon = folder.icon;
+            // Resolve custom icon
+            let LucideIcon: any = FolderOpen;
+            let emojiChar: string | undefined = undefined;
+
+            if (folder.iconId) {
+              const found = ALL_ICONS.find((i) => i.id === folder.iconId);
+              if (found) {
+                if (found.lucideIcon) {
+                  LucideIcon = (LucideIcons as any)[found.lucideIcon] || FolderOpen;
+                } else if (found.emoji) {
+                  LucideIcon = null;
+                  emojiChar = found.emoji;
+                }
+              }
+            }
+
             return (
               <div
                 key={folder.id}
                 className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-3 transition-all duration-200 hover:border-primary/30 hover:bg-card hover:shadow-sm"
                 onClick={() => onFolderSelect?.(folder.path, folder.color)}
               >
-                {/* Color dot */}
+                {/* Icon wrapper */}
                 <div
-                  className="relative h-10 w-10 flex-shrink-0 rounded-lg shadow-sm"
+                  className="relative h-10 w-10 flex-shrink-0 rounded-lg shadow-sm flex items-center justify-center"
                   style={{ backgroundColor: folder.color + "22" }}
                 >
-                  <Icon
-                    className="absolute inset-0 m-auto h-5 w-5"
-                    style={{ color: folder.color }}
-                  />
+                  {LucideIcon ? (
+                    <LucideIcon
+                      className="h-5 w-5"
+                      style={{ color: folder.color }}
+                    />
+                  ) : (
+                    <span className="text-xl select-none font-sans leading-none">{emojiChar}</span>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -221,15 +287,12 @@ export function FoldersTab({ onFolderSelect }: FoldersTabProps) {
                     <div className="absolute right-0 top-8 z-50 w-36 overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
                       <button
                         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-secondary/60"
-                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); onFolderSelect?.(folder.path, folder.color); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReset(folder.path);
+                        }}
                       >
                         <RotateCcw className="h-3.5 w-3.5" /> Reset Icon
-                      </button>
-                      <button
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
-                        onClick={(e) => { e.stopPropagation(); handleRemove(folder.id); }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Remove
                       </button>
                     </div>
                   )}
@@ -249,7 +312,7 @@ export function FoldersTab({ onFolderSelect }: FoldersTabProps) {
           <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-border/50 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <FolderHeart className="h-4 w-4" />
-              No folders added yet
+              No customized folders yet
             </div>
           </div>
         )}

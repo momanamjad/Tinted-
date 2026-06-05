@@ -1,71 +1,7 @@
-import {
-  Archive,
-  Binary,
-  BookOpen,
-  Briefcase,
-  Camera,
-  Code2,
-  Cpu,
-  Database,
-  Download,
-  Film,
-  Flame,
-  Folder,
-  Gamepad2,
-  Globe,
-  Heart,
-  Home,
-  Image,
-  Mail,
-  Music,
-  Package,
-  Palette,
-  Shield,
-  Star,
-  Terminal,
-  Trophy,
-  Video,
-  Wifi,
-  Zap,
-} from "lucide-react";
+import { Folder } from "lucide-react";
+import * as LucideIcons from "lucide-react";
+import { ALL_ICONS } from "@/data/icons";
 import { cn } from "@/utils/cn";
-
-type IconEntry = {
-  id: string;
-  name: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
-
-const PREVIEW_ICONS: IconEntry[] = [
-  { id: "folder", name: "Folder", icon: Folder },
-  { id: "code", name: "Code", icon: Code2 },
-  { id: "terminal", name: "Terminal", icon: Terminal },
-  { id: "database", name: "Database", icon: Database },
-  { id: "cpu", name: "CPU", icon: Cpu },
-  { id: "binary", name: "Binary", icon: Binary },
-  { id: "music", name: "Music", icon: Music },
-  { id: "camera", name: "Camera", icon: Camera },
-  { id: "video", name: "Video", icon: Video },
-  { id: "film", name: "Film", icon: Film },
-  { id: "image", name: "Image", icon: Image },
-  { id: "home", name: "Home", icon: Home },
-  { id: "heart", name: "Heart", icon: Heart },
-  { id: "star", name: "Star", icon: Star },
-  { id: "briefcase", name: "Work", icon: Briefcase },
-  { id: "globe", name: "Globe", icon: Globe },
-  { id: "mail", name: "Mail", icon: Mail },
-  { id: "download", name: "Download", icon: Download },
-  { id: "archive", name: "Archive", icon: Archive },
-  { id: "shield", name: "Shield", icon: Shield },
-  { id: "flame", name: "Flame", icon: Flame },
-  { id: "zap", name: "Zap", icon: Zap },
-  { id: "gamepad", name: "Gaming", icon: Gamepad2 },
-  { id: "trophy", name: "Trophy", icon: Trophy },
-  { id: "palette", name: "Design", icon: Palette },
-  { id: "book", name: "Books", icon: BookOpen },
-  { id: "wifi", name: "Network", icon: Wifi },
-  { id: "package", name: "Package", icon: Package },
-];
 
 type IconPreviewProps = {
   color: string;
@@ -74,17 +10,44 @@ type IconPreviewProps = {
   folderName?: string;
 };
 
+const QUICK_ICON_IDS = [
+  "folder",
+  "code",
+  "terminal",
+  "camera",
+  "music",
+  "palette",
+  "briefcase",
+  "trash",
+  "download",
+  "emoji-red-heart",
+  "emoji-star",
+  "emoji-rocket"
+];
+
 export function IconPreview({
   color,
   selectedIconId = "folder",
   onIconSelect,
   folderName = "My Folder",
 }: IconPreviewProps) {
-  const found = PREVIEW_ICONS.find((i) => i.id === selectedIconId);
-  const SelectedIcon = found?.icon ?? Folder;
+  let SelectedIcon: any = Folder;
+  let selectedEmoji: string | undefined = undefined;
+
+  if (selectedIconId !== "folder") {
+    const found = ALL_ICONS.find((i) => i.id === selectedIconId);
+    if (found) {
+      if (found.lucideIcon) {
+        SelectedIcon = (LucideIcons as any)[found.lucideIcon] || Folder;
+      } else if (found.emoji) {
+        SelectedIcon = null;
+        selectedEmoji = found.emoji;
+      }
+    }
+  }
 
   // Build folder color variants
-  const darkColor = adjustBrightness(color, -30);
+  const darkColor = adjustBrightness(color, -40);
   const lightColor = adjustBrightness(color, 30);
 
   return (
@@ -107,10 +70,19 @@ export function IconPreview({
             <div className="absolute inset-x-3 top-3 h-2 rounded-full bg-white/20" />
             {/* Icon inside folder */}
             <div className="flex h-full items-center justify-center">
-              <SelectedIcon
-                className="h-8 w-8 opacity-30"
-                style={{ color: darkColor }}
-              />
+              {SelectedIcon ? (
+                <SelectedIcon
+                  className="h-8 w-8 opacity-30"
+                  style={{ color: darkColor }}
+                />
+              ) : (
+                <span
+                  className="text-3xl opacity-40 select-none font-sans leading-none"
+                  style={{ color: darkColor }}
+                >
+                  {selectedEmoji}
+                </span>
+              )}
             </div>
           </div>
           {/* Shadow */}
@@ -131,23 +103,48 @@ export function IconPreview({
           Quick Icon
         </p>
         <div className="grid grid-cols-6 gap-1.5">
-          {PREVIEW_ICONS.slice(0, 12).map(({ id, name, icon: Icon }) => {
+          {QUICK_ICON_IDS.map((id) => {
             const isSelected = selectedIconId === id;
+            let iconName = "Folder";
+            let LucideComp: any = Folder;
+            let emojiChar: string | undefined = undefined;
+
+            if (id !== "folder") {
+              const found = ALL_ICONS.find((i) => i.id === id);
+              if (found) {
+                iconName = found.name;
+                if (found.lucideIcon) {
+                  LucideComp = (LucideIcons as any)[found.lucideIcon] || Folder;
+                } else if (found.emoji) {
+                  LucideComp = null;
+                  emojiChar = found.emoji;
+                }
+              }
+            }
+
             return (
               <button
                 key={id}
                 id={`icon-preview-${id}`}
-                title={name}
+                title={iconName}
                 onClick={() => onIconSelect?.(id)}
                 className={cn(
-                  "flex flex-col items-center gap-1 rounded-lg p-2 transition-all duration-150",
+                  "flex flex-col items-center justify-center gap-1 rounded-lg p-1 transition-all duration-150 h-14 w-full",
                   isSelected
                     ? "bg-primary/15 text-primary ring-1 ring-primary/30"
                     : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                 )}
               >
-                <Icon className="h-4 w-4" />
-                <span className="text-[9px] leading-none truncate w-full text-center">{name}</span>
+                <div className="flex h-4 w-4 items-center justify-center">
+                  {LucideComp ? (
+                    <LucideComp className="h-4 w-4" />
+                  ) : (
+                    <span className="text-base select-none font-sans leading-none">{emojiChar}</span>
+                  )}
+                </div>
+                <span className="text-[8px] leading-none truncate w-full text-center mt-1">
+                  {iconName}
+                </span>
               </button>
             );
           })}

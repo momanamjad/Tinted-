@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { shell } from "electron";
-import { generateFolderIco } from "./icon-generator.js";
+import { generateFolderIco, makeIco } from "./icon-generator.js";
 import type { ApplyIconRequest, FolderIconRecord } from "./types.js";
 
 const ICON_DIR = ".tintd-icons";
@@ -17,7 +17,11 @@ export async function applyFolderIcon(
   const desktopIniPath = path.join(request.folderPath, "desktop.ini");
 
   await fs.mkdir(iconDirectory, { recursive: true });
-  await fs.writeFile(iconPath, generateFolderIco(request.color));
+  if (request.pixels) {
+    await fs.writeFile(iconPath, makeIco(new Uint8ClampedArray(request.pixels)));
+  } else {
+    await fs.writeFile(iconPath, generateFolderIco(request.color));
+  }
   await fs.writeFile(
     desktopIniPath,
     `[.ShellClassInfo]\r\nIconResource=${ICON_DIR}\\${iconName},0\r\nIconFile=${ICON_DIR}\\${iconName}\r\nIconIndex=0\r\n`,

@@ -16,6 +16,8 @@ export type ApplyIconRequest = {
   folderPath: string;
   color: string;
   autoRefreshExplorer: boolean;
+  iconId?: string;
+  pixels?: number[];
 };
 
 export type FolderIconStatus = "applied" | "reset" | "failed";

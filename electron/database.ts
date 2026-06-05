@@ -99,6 +99,63 @@ export class AppDatabase {
     );
   }
 
+  saveFolderCustomization(data: {
+    folderPath: string;
+    icoPath: string;
+    selectedIcon: string;
+    selectedColor: string;
+    appliedDate: string;
+  }) {
+    this.run(
+      `INSERT INTO folder_customizations (folderPath, icoPath, selectedIcon, selectedColor, appliedDate)
+       VALUES (:folderPath, :icoPath, :selectedIcon, :selectedColor, :appliedDate)
+       ON CONFLICT(folderPath) DO UPDATE SET
+         icoPath = excluded.icoPath,
+         selectedIcon = excluded.selectedIcon,
+         selectedColor = excluded.selectedColor,
+         appliedDate = excluded.appliedDate`,
+      {
+        ":folderPath": data.folderPath,
+        ":icoPath": data.icoPath,
+        ":selectedIcon": data.selectedIcon,
+        ":selectedColor": data.selectedColor,
+        ":appliedDate": data.appliedDate
+      }
+    );
+    this.persist();
+  }
+
+  getFolderCustomization(folderPath: string) {
+    return this.get<{
+      id: number;
+      folderPath: string;
+      icoPath: string;
+      selectedIcon: string;
+      selectedColor: string;
+      appliedDate: string;
+    }>("SELECT * FROM folder_customizations WHERE folderPath = :folderPath", {
+      ":folderPath": folderPath
+    });
+  }
+
+  removeFolderCustomization(folderPath: string) {
+    this.run("DELETE FROM folder_customizations WHERE folderPath = :folderPath", {
+      ":folderPath": folderPath
+    });
+    this.persist();
+  }
+
+  getCustomizationHistory() {
+    return this.all<{
+      id: number;
+      folderPath: string;
+      icoPath: string;
+      selectedIcon: string;
+      selectedColor: string;
+      appliedDate: string;
+    }>("SELECT id, folderPath, icoPath, selectedIcon, selectedColor, appliedDate FROM folder_customizations ORDER BY datetime(appliedDate) DESC LIMIT 50");
+  }
+
   private migrate() {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -114,6 +171,16 @@ export class AppDatabase {
         status TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         message TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS folder_customizations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folderPath TEXT NOT NULL UNIQUE,
+        icoPath TEXT NOT NULL,
+        selectedIcon TEXT NOT NULL,
+        selectedColor TEXT NOT NULL,
+        appliedDate TEXT NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
   }

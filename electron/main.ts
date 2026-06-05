@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { AppDatabase } from "./database.js";
 import { applyFolderIcon, resetFolderIcon } from "./folder-icons.js";
 import type { ApplyIconRequest, Settings, SettingValue } from "./types.js";
+import { registerIconHandlers } from "./handlers/iconHandlers.js";
+import fs from "node:fs/promises";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +25,7 @@ async function createWindow() {
     backgroundColor: "#09090b",
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -63,7 +65,21 @@ function registerIpc() {
     await shell.openPath(folderPath);
   });
 
-  ipcMain.handle("icons:history", () => db.getIconHistory());
+  ipcMain.handle("icons:history", () => {
+    const list = db.getCustomizationHistory();
+    return list.map((item: any) => ({
+      id: item.id,
+      folderPath: item.folderPath,
+      color: item.selectedColor,
+      iconPath: item.icoPath,
+      status: "applied",
+      updatedAt: item.appliedDate,
+      message: `Icon: ${item.selectedIcon}`,
+      iconId: item.selectedIcon
+    }));
+  });
+
+  registerIconHandlers(db);
 
   ipcMain.handle("icons:apply", async (_event, request: ApplyIconRequest) => {
     const record = await applyFolderIcon(request);
@@ -72,6 +88,26 @@ function registerIpc() {
   });
 
   ipcMain.handle("icons:reset", async (_event, folderPath: string) => {
+    const desktopIniPath = path.join(folderPath, "desktop.ini");
+    try {
+      const { execFile } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      await promisify(execFile)("attrib", ["-h", "-s", desktopIniPath]);
+      await fs.rm(desktopIniPath, { force: true });
+    } catch (e) {}
+
+    try {
+      const { execFile } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      await promisify(execFile)("attrib", ["-s", folderPath]);
+    } catch (e) {}
+
+    const customization = db.getFolderCustomization(folderPath);
+    if (customization && customization.icoPath) {
+      await fs.rm(customization.icoPath, { force: true });
+    }
+    db.removeFolderCustomization(folderPath);
+
     const record = await resetFolderIcon(folderPath);
     return db.upsertIconRecord(record);
   });

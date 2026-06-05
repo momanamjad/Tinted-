@@ -20,7 +20,7 @@ export function generateFolderIco(hexColor: string): Buffer {
   return makeIco(pixels);
 }
 
-function makeIco(pixels: Uint8ClampedArray): Buffer {
+export function makeIco(pixels: Uint8ClampedArray): Buffer {
   const pixelBytes = ICON_SIZE * ICON_SIZE * 4;
   const maskStride = Math.ceil(ICON_SIZE / 32) * 4;
   const maskBytes = maskStride * ICON_SIZE;

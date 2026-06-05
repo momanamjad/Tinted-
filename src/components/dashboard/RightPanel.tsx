@@ -9,12 +9,14 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { ColorPicker } from "@/components/dashboard/ColorPicker";
 import { IconPreview } from "@/components/dashboard/IconPreview";
 import { cn } from "@/utils/cn";
+import { ALL_ICONS } from "@/data/icons";
 
 type RightPanelProps = {
   color: string;
@@ -46,6 +48,17 @@ export function RightPanel({
     : "No folder selected";
 
   const canApply = Boolean(folderPath.trim());
+
+  // Filter matching icons for the side search box
+  const matchingIcons = ALL_ICONS.filter((icon) => {
+    const q = iconSearch.toLowerCase().trim();
+    return (
+      q &&
+      (icon.name.toLowerCase().includes(q) ||
+        icon.keywords.some((kw) => kw.includes(q)) ||
+        icon.id.includes(q))
+    );
+  });
 
   return (
     <aside className="flex w-[300px] flex-shrink-0 flex-col gap-0 border-l border-border bg-card overflow-hidden">
@@ -121,7 +134,7 @@ export function RightPanel({
             />
           </button>
           {iconSectionOpen && (
-            <div className="px-4 pb-4">
+            <div className="px-4 pb-4 space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -132,6 +145,43 @@ export function RightPanel({
                   className="pl-9 text-sm h-9"
                 />
               </div>
+
+              {/* Show matching icons */}
+              {iconSearch.trim() && (
+                <div className="grid grid-cols-4 gap-1 rounded-lg border border-border/60 bg-background/30 p-1.5 max-h-[160px] overflow-y-auto">
+                  {matchingIcons.slice(0, 12).map((icon) => {
+                    const isSelected = selectedIconId === icon.id;
+                    let LucideComp: any = null;
+                    if (icon.lucideIcon) {
+                      LucideComp = (LucideIcons as any)[icon.lucideIcon] || LucideIcons.HelpCircle;
+                    }
+                    return (
+                      <button
+                        key={icon.id}
+                        onClick={() => onIconSelect?.(icon.id)}
+                        title={icon.name}
+                        className={cn(
+                          "flex items-center justify-center rounded p-1 transition-all h-8",
+                          isSelected
+                            ? "bg-primary/20 text-primary"
+                            : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+                        )}
+                      >
+                        {LucideComp ? (
+                          <LucideComp className="h-4 w-4" />
+                        ) : (
+                          <span className="text-base select-none font-sans leading-none">{icon.emoji}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {matchingIcons.length === 0 && (
+                    <p className="col-span-4 py-2 text-center text-[10px] text-muted-foreground">
+                      No matching icons
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
