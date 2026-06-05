@@ -68,16 +68,14 @@ export function FoldersTab({
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays === 1) return "Yesterday";
-    return `${diffDays} days ago`;
+    return `${diffDays}d ago`;
   }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
   };
-
   const handleDragLeave = () => setIsDragOver(false);
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -89,19 +87,14 @@ export function FoldersTab({
       } else {
         filePath = (files[0] as any).path || "";
       }
-
-      if (filePath) {
-        onFolderSelect?.(filePath, "#3b82f6");
-      }
+      if (filePath) onFolderSelect?.(filePath, "#3b82f6");
     }
   };
 
   const handleBrowse = async () => {
     if (!window.tintd?.ipcRenderer) return;
     const selected = await window.tintd.ipcRenderer.invoke("folders:select");
-    if (selected) {
-      onFolderSelect?.(selected, "#3b82f6");
-    }
+    if (selected) onFolderSelect?.(selected, "#3b82f6");
   };
 
   const handleReset = async (folderPath: string) => {
@@ -122,24 +115,27 @@ export function FoldersTab({
 
   return (
     <div className="flex h-full flex-col gap-5 overflow-auto pb-4">
+      {/* Selected folder banner */}
       {selectedFolderPath && (
-        <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <FolderOpen className="h-5 w-5" />
+        <div className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/8 to-primary/4 p-4 shadow-sm float-in">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/15 border border-primary/20">
+            <FolderOpen className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/80">Selected Folder</p>
-            <p className="truncate text-sm font-bold text-foreground mt-0.5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-primary/80 mb-0.5">
+              Selected Folder
+            </p>
+            <p className="truncate text-[13px] font-bold text-foreground">
               {selectedFolderPath.split("\\").pop() || "Folder"}
             </p>
-            <p className="truncate text-[11px] text-muted-foreground mt-0.5" title={selectedFolderPath}>
+            <p className="truncate text-[10px] text-muted-foreground font-mono mt-0.5" title={selectedFolderPath}>
               {selectedFolderPath}
             </p>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground flex-shrink-0"
             onClick={() => onFolderSelect?.("", "#3b82f6")}
             title="Clear selection"
           >
@@ -156,16 +152,21 @@ export function FoldersTab({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-all duration-200",
+          "relative flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-250 overflow-hidden",
           isDragOver
-            ? "border-primary bg-primary/5 scale-[1.01]"
-            : "border-border/60 bg-card/40 hover:border-primary/40 hover:bg-card/60"
+            ? "border-primary bg-primary/6 scale-[1.01]"
+            : "border-border/50 bg-card/30 hover:border-primary/30 hover:bg-card/50"
         )}
       >
+        {/* Subtle radial glow when dragging */}
+        {isDragOver && (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.1),transparent_70%)] pointer-events-none" />
+        )}
+
         <div
           className={cn(
-            "flex h-16 w-16 items-center justify-center rounded-2xl border border-border/50 bg-secondary/40 transition-all duration-200",
-            isDragOver && "border-primary/50 bg-primary/10 scale-110"
+            "flex h-16 w-16 items-center justify-center rounded-2xl border border-border/40 bg-secondary/50 transition-all duration-200",
+            isDragOver && "border-primary/50 bg-primary/10 scale-110 shadow-primary-glow"
           )}
         >
           <Upload
@@ -177,22 +178,22 @@ export function FoldersTab({
         </div>
         <div>
           <p className="text-[15px] font-semibold text-foreground">
-            {isDragOver ? "Release to add folders" : "Drop folders here"}
+            {isDragOver ? "Release to add folder" : "Drop a folder here"}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Drag & drop any Windows folders to customize them
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Drag & drop any Windows folder to customize it
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="h-px w-12 bg-border/60" />
-          <span className="text-xs text-muted-foreground">or</span>
-          <div className="h-px w-12 bg-border/60" />
+          <div className="h-px w-12 bg-border/50" />
+          <span className="text-xs text-muted-foreground/60">or</span>
+          <div className="h-px w-12 bg-border/50" />
         </div>
         <Button
           id="folders-browse-btn"
           variant="outline"
           size="sm"
-          className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/5"
+          className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/5 rounded-xl h-9 px-5 font-semibold text-[12px]"
           onClick={handleBrowse}
         >
           <FolderOpen className="h-4 w-4 text-primary" />
@@ -200,24 +201,30 @@ export function FoldersTab({
         </Button>
       </div>
 
-      {/* Recently Added */}
+      {/* Recently customized */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Star className="h-4 w-4 text-primary" />
-            <h3 className="text-[13px] font-semibold text-foreground">Recently Added</h3>
-            <Badge variant="secondary" className="text-[10px]">
+            <Star className="h-3.5 w-3.5 text-primary" />
+            <h3 className="text-[13px] font-bold text-foreground">Recently Customized</h3>
+            <Badge
+              variant="secondary"
+              className="text-[9px] font-bold px-1.5 py-0 h-4 rounded-full"
+            >
               {folders.length}
             </Badge>
           </div>
-          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-[11px] text-muted-foreground rounded-lg"
+          >
             View All <ChevronRight className="h-3 w-3" />
           </Button>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {folders.map((folder) => {
-            // Resolve custom icon
             let LucideIcon: any = FolderOpen;
             let emojiChar: string | undefined = undefined;
 
@@ -233,58 +240,65 @@ export function FoldersTab({
               }
             }
 
+            const isSelected = selectedFolderPath === folder.path;
+
             return (
               <div
                 key={folder.id}
-                className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-3 transition-all duration-200 hover:border-primary/30 hover:bg-card hover:-translate-y-0.5 hover:shadow-md"
+                className={cn(
+                  "group relative flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-all duration-200",
+                  isSelected
+                    ? "border-primary/30 bg-primary/6 shadow-sm"
+                    : "border-border/40 bg-card/50 hover:border-border/70 hover:bg-card hover:-translate-y-0.5 hover:shadow-card-hover"
+                )}
                 onClick={() => onFolderSelect?.(folder.path, folder.color)}
               >
-                {/* Icon wrapper */}
+                {/* Colored icon tile */}
                 <div
-                  className="relative h-10 w-10 flex-shrink-0 rounded-lg shadow-sm flex items-center justify-center"
-                  style={{ backgroundColor: folder.color + "22" }}
+                  className="relative h-10 w-10 flex-shrink-0 rounded-xl shadow-sm flex items-center justify-center overflow-hidden"
+                  style={{ backgroundColor: folder.color + "20" }}
                 >
+                  <div
+                    className="absolute inset-0 opacity-10"
+                    style={{ backgroundColor: folder.color }}
+                  />
                   {LucideIcon ? (
-                    <LucideIcon
-                      className="h-5 w-5"
-                      style={{ color: folder.color }}
-                    />
+                    <LucideIcon className="h-5 w-5 relative z-10" style={{ color: folder.color }} />
                   ) : (
-                    <span className="text-xl select-none font-sans leading-none">{emojiChar}</span>
+                    <span className="text-xl select-none font-sans leading-none relative z-10">
+                      {emojiChar}
+                    </span>
                   )}
                 </div>
 
                 {/* Info */}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-semibold text-foreground">{folder.name}</p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="truncate text-[13px] font-semibold text-foreground">{folder.name}</p>
                     {folder.applied && (
-                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                      <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-primary" />
                     )}
                   </div>
-                  <p className="truncate text-[11px] text-muted-foreground">{folder.path}</p>
+                  <p className="truncate text-[10px] text-muted-foreground/70 font-mono">
+                    {folder.path}
+                  </p>
                 </div>
 
-                {/* Color chip */}
+                {/* Color dot + date */}
                 <div className="flex flex-shrink-0 items-center gap-2">
                   <div
-                    className="h-5 w-5 rounded-full border border-white/10 shadow-sm"
+                    className="h-4 w-4 rounded-full border border-black/10 shadow-sm"
                     style={{ backgroundColor: folder.color }}
                   />
-                  <span className="text-[11px] font-mono text-muted-foreground">{folder.color}</span>
+                  <span className="text-[10px] text-muted-foreground/60 tabular-nums">{folder.date}</span>
                 </div>
 
-                {/* Date */}
-                <span className="flex-shrink-0 text-[11px] text-muted-foreground/60">
-                  {folder.date}
-                </span>
-
-                {/* Actions menu */}
+                {/* Menu */}
                 <div className="relative flex-shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                    className="h-7 w-7 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       setMenuOpenId(menuOpenId === folder.id ? null : folder.id);
@@ -293,9 +307,9 @@ export function FoldersTab({
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                   {menuOpenId === folder.id && (
-                    <div className="absolute right-0 top-8 z-50 w-36 overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
+                    <div className="absolute right-0 top-8 z-50 w-36 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
                       <button
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-secondary/60"
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-[12px] text-foreground hover:bg-secondary/60 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleReset(folder.path);
@@ -307,9 +321,9 @@ export function FoldersTab({
                   )}
                 </div>
 
-                {/* Hover sidebar indicator */}
+                {/* Active indicator bar */}
                 <span
-                  className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full opacity-0 transition-opacity group-hover:opacity-100"
+                  className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full opacity-0 transition-opacity group-hover:opacity-100"
                   style={{ backgroundColor: folder.color }}
                 />
               </div>
@@ -318,10 +332,11 @@ export function FoldersTab({
         </div>
 
         {folders.length === 0 && (
-          <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-border/50 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <FolderHeart className="h-4 w-4" />
-              No customized folders yet
+          <div className="flex h-28 items-center justify-center rounded-2xl border border-dashed border-border/40 bg-card/20">
+            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+              <FolderHeart className="h-6 w-6 opacity-40" />
+              <p className="text-[12px] font-medium">No customized folders yet</p>
+              <p className="text-[10px] opacity-60">Drop a folder above to get started</p>
             </div>
           </div>
         )}

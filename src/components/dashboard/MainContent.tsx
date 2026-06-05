@@ -339,14 +339,17 @@ export function MainContent() {
       {/* Center: Header + Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border/60 bg-card/50 px-5 backdrop-blur-sm">
+        <header className="relative flex h-14 flex-shrink-0 items-center justify-between border-b border-border/60 bg-card/60 px-5 backdrop-blur-sm">
+          {/* Subtle bottom gradient line */}
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent pointer-events-none" />
+
           <div className="flex items-center gap-3">
             {/* Collapse toggle */}
             <Button
               id="sidebar-collapse-btn"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground"
+              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
               onClick={() => setSidebarCollapsed((v) => !v)}
               title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
@@ -357,38 +360,40 @@ export function MainContent() {
               )}
             </Button>
 
-            <div className="h-5 w-px bg-border/60" />
+            <div className="h-4 w-px bg-border/70" />
 
             {/* Breadcrumb */}
             <div className="flex items-center gap-2">
-              <Icon className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">{meta.label}</h2>
-              <span className="hidden text-muted-foreground/40 md:inline">·</span>
-              <p className="hidden text-xs text-muted-foreground md:block">{meta.description}</p>
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+                <Icon className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <h2 className="text-[13px] font-bold text-foreground tracking-tight">{meta.label}</h2>
+              <span className="hidden text-muted-foreground/30 md:inline text-sm">·</span>
+              <p className="hidden text-[11px] text-muted-foreground/70 md:block">{meta.description}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             {isBgStyling && (
-              <Badge variant="outline" className="border-primary/40 text-primary animate-pulse flex items-center gap-1.5 text-[10px] bg-primary/5 mr-2">
+              <Badge variant="outline" className="border-primary/40 text-primary animate-pulse flex items-center gap-1.5 text-[9px] bg-primary/6 mr-1 rounded-full px-2.5 py-1">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Auto-styling...</span>
+                <span className="font-semibold">Auto-styling…</span>
               </Badge>
             )}
             <Badge
               variant="outline"
-              className="hidden border-primary/30 text-[10px] text-primary sm:flex"
+              className="hidden border-primary/25 text-[9px] text-primary sm:flex rounded-full px-2.5 font-bold"
             >
               v0.1.0
             </Badge>
-            <Badge variant="secondary" className="hidden text-[10px] sm:flex">
-              Windows Edition
+            <Badge variant="secondary" className="hidden text-[9px] sm:flex rounded-full px-2.5 font-semibold">
+              Windows
             </Badge>
           </div>
         </header>
 
         {/* Tab content */}
-        <main className="flex-1 overflow-hidden p-5 flex flex-col gap-4">
+        <main className="flex-1 overflow-hidden p-6 flex flex-col gap-4">
           {!window.tintd?.ipcRenderer && (
             <div className="flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-500 shadow-sm backdrop-blur-md">
               <Clock className="h-5 w-5 flex-shrink-0 animate-pulse" /> {/* Reuse Clock or import AlertTriangle */}
@@ -444,38 +449,40 @@ export function MainContent() {
 
       {/* Floating Toast Notification */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
-          <div className={`flex items-start gap-3.5 px-4.5 py-4 rounded-xl border shadow-xl backdrop-blur-md max-w-sm ${
-            toast.type === "success"
-              ? "bg-emerald-950/85 border-emerald-500/35 text-emerald-100 shadow-emerald-950/20"
-              : toast.type === "error"
-              ? "bg-rose-950/85 border-rose-500/35 text-rose-100 shadow-rose-950/20"
-              : "bg-cyan-950/85 border-cyan-500/35 text-cyan-100 shadow-cyan-950/20"
-          }`}>
-            {toast.iconId && (
-              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white/10 text-white font-sans text-base">
-                {toast.iconId === "folder" ? "📁" : toast.iconId.startsWith("emoji-") 
-                  ? ALL_ICONS.find(i => i.id === toast.iconId)?.emoji || "💡"
-                  : <Sparkles className="h-4 w-4" />
-                }
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <h4 className="text-[10px] font-bold uppercase tracking-wider opacity-85">
-                {toast.type === "success" ? "✓ Icon Applied" : toast.type === "error" ? "✗ Error" : "✓ Auto-Styled"}
-              </h4>
-              <p className="text-xs font-semibold mt-0.5 leading-snug">{toast.message}</p>
+        <div className="fixed bottom-6 right-6 z-50 toast-in">
+          <div
+            className={`flex items-start gap-3 px-4 py-3.5 rounded-2xl border shadow-2xl glass max-w-[320px] ${
+              toast.type === "success"
+                ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-100"
+                : toast.type === "error"
+                ? "bg-rose-950/90 border-rose-500/30 text-rose-100"
+                : "bg-sky-950/90 border-sky-500/30 text-sky-100"
+            }`}
+          >
+            {/* Icon */}
+            <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white text-base ${
+              toast.type === "success" ? "border border-emerald-400/20" : toast.type === "error" ? "border border-rose-400/20" : "border border-sky-400/20"
+            }`}>
+              {toast.iconId === "folder" ? "📁" : toast.iconId?.startsWith("emoji-")
+                ? ALL_ICONS.find(i => i.id === toast.iconId)?.emoji || "💡"
+                : <Sparkles className="h-4 w-4" />}
             </div>
-            {toast.type === "error" ? (
-              <button 
-                onClick={() => setToast(null)} 
-                className="px-2 py-1 bg-white/15 hover:bg-white/25 text-[9px] font-bold rounded uppercase tracking-wider text-white transition ml-2 self-center"
-              >
-                Dismiss
-              </button>
-            ) : (
-              <button onClick={() => setToast(null)} className="text-white/45 hover:text-white text-xs ml-2 self-start leading-none mt-0.5">✕</button>
-            )}
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <h4 className="text-[9px] font-black uppercase tracking-[0.14em] opacity-70 mb-0.5">
+                {toast.type === "success" ? "✓ Icon Applied" : toast.type === "error" ? "✗ Error" : "✦ Auto-Styled"}
+              </h4>
+              <p className="text-[12px] font-semibold leading-snug">{toast.message}</p>
+            </div>
+
+            {/* Dismiss */}
+            <button
+              onClick={() => setToast(null)}
+              className="text-white/40 hover:text-white/90 text-sm self-start ml-1 leading-none mt-0.5 transition-colors"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}

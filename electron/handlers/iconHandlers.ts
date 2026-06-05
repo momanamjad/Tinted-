@@ -1,4 +1,4 @@
-import { ipcMain, app, shell } from "electron";
+import { ipcMain, app } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -79,19 +79,11 @@ export function registerIconHandlers(db: any) {
         }
       }
 
-      // Wait 500ms to let the OS flush attributes and desktop.ini changes
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait 1s to let the OS flush attributes and desktop.ini writes
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Notify the Windows Shell to refresh the icon instantly
+      // Silently notify Windows Shell to redraw the folder icon
       await refreshWindowsShell(folderPath);
-
-      // 9. Auto refresh Explorer by revealing the item in folder
-      const settings = db.getSettings();
-      if (settings.autoRefreshExplorer) {
-        try {
-          shell.showItemInFolder(folderPath);
-        } catch (e) {}
-      }
 
       return {
         success: true,
@@ -140,8 +132,8 @@ export function registerIconHandlers(db: any) {
       // 5. Delete entry from SQLite
       db.removeFolderCustomization(folderPath);
 
-      // Wait 500ms to let the OS flush attributes and desktop.ini changes
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait 1s to let the OS flush attribute removals
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Notify Windows Shell to refresh
       await refreshWindowsShell(folderPath);

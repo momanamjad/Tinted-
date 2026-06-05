@@ -7,7 +7,8 @@
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "compile-electron": "tsc -p electron/tsconfig.json",
+    "dev": "npm run compile-electron && concurrently -k \"vite\" \"tsc -p electron/tsconfig.json --watch --preserveWatchOutput\" \"wait-on tcp:5173 && electron .\"",
     "build": "tsc --noEmit && vite build && tsc -p electron/tsconfig.json",
     "dist": "npm run build && electron-builder --win nsis",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",

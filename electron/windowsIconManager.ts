@@ -75,29 +75,40 @@ export async function unsetFolderSystem(folderPath: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Silently tell Windows Explorer to redraw icons for the given folder.
+ * Uses SHChangeNotify only — never opens an Explorer window.
+ */
 export async function refreshWindowsShell(folderPath?: string): Promise<void> {
+  // Build a PowerShell script that calls SHChangeNotify silently.
+  // SHCNE_UPDATEITEM   0x00002000 – the folder's own icon changed
+  // SHCNE_UPDATEDIR    0x00001000 – contents of parent dir changed
+  // SHCNE_ASSOCCHANGED 0x08000000 – flush all shell associations / icon cache
+  // SHCNF_PATHW        0x0005     – item1/item2 are Unicode paths
   let script = `
-$definition = '[System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern void SHChangeNotify(int eventId, int flags, string item1, string string2);'
-Add-Type -MemberDefinition $definition -Name Explorer -Namespace WinAPI
+$sig = '[System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern void SHChangeNotify(uint wEventId, uint uFlags, string dwItem1, string dwItem2);'
+Add-Type -MemberDefinition $sig -Name Shell -Namespace TintdShell -ErrorAction SilentlyContinue
 `;
 
   if (folderPath) {
-    const escapedPath = folderPath.replace(/'/g, "''");
-    const parentPath = path.dirname(folderPath);
-    const escapedParent = parentPath.replace(/'/g, "''");
-    // Notify update item on the folder itself, and update directory on its parent folder
-    script += `[WinAPI.Explorer]::SHChangeNotify(0x00002000, 0x0005, "${escapedPath}", $null)\n`;
-    script += `[WinAPI.Explorer]::SHChangeNotify(0x00001000, 0x0005, "${escapedParent}", $null)\n`;
+    // Escape backslashes for PowerShell string
+    const ps = folderPath.replace(/\\/g, "\\\\");
+    const pp = path.dirname(folderPath).replace(/\\/g, "\\\\");
+    script += `[TintdShell.Shell]::SHChangeNotify(0x00002000, 0x0005, "${ps}", $null)\n`;
+    script += `[TintdShell.Shell]::SHChangeNotify(0x00001000, 0x0005, "${pp}", $null)\n`;
   }
-  script += `[WinAPI.Explorer]::SHChangeNotify(0x08000000, 0, $null, $null)\n`;
+  // Global flush – forces Explorer to repaint all affected items immediately
+  script += `[TintdShell.Shell]::SHChangeNotify(0x08000000, 0x0000, $null, $null)\n`;
 
   try {
     const base64 = Buffer.from(script, "utf16le").toString("base64");
     const { exec } = await import("node:child_process");
     const { promisify } = await import("node:util");
-    // Run PowerShell in a hidden window to prevent taskbar flash
-    await promisify(exec)(`powershell -WindowStyle Hidden -EncodedCommand ${base64}`);
+    await promisify(exec)(
+      `powershell -NonInteractive -WindowStyle Hidden -EncodedCommand ${base64}`
+    );
   } catch (e) {
-    console.error("Failed to refresh Windows Shell:", e);
+    console.error("[refreshWindowsShell] SHChangeNotify failed:", e);
   }
 }
+

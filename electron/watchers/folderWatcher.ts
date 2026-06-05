@@ -7,6 +7,7 @@ export class FolderWatcher {
   private mainWindow: BrowserWindow | null = null;
   private watchers = new Map<string, FSWatcher>();
   private autoStyleDelay: number = 3000;
+  private processingFolders = new Set<string>();
 
   constructor(mainWindow: BrowserWindow | null = null) {
     this.mainWindow = mainWindow;
@@ -117,34 +118,112 @@ export class FolderWatcher {
     return false;
   }
 
+  private isSkippableFolder(folderPath: string, folderName: string): boolean {
+    // Skip Windows "New folder" placeholder
+    if (folderName === "New folder" || folderName.startsWith("New folder (")) {
+      return true;
+    }
+
+    // Skip system folders
+    if (this.isSystemFolder(folderPath)) {
+      return true;
+    }
+
+    // Skip hidden folders
+    if (folderName.startsWith(".")) {
+      return true;
+    }
+
+    // Skip temp folders
+    if (
+      folderName.toLowerCase().includes("temp") ||
+      folderName.toLowerCase().includes("tmp")
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
   private async onNewFolder(folderPath: string): Promise<void> {
+    const folderName = path.basename(folderPath);
+
+    if (this.isSkippableFolder(folderPath, folderName)) {
+      console.log(`[WATCHER DEBUG] [SKIP] Skipping folder: ${folderName}`);
+      return;
+    }
+
+    console.log(`[WATCHER DEBUG] [START] Processing: ${folderPath}`);
+
+    if (this.processingFolders.has(folderPath)) {
+      console.log(`[WATCHER DEBUG] [SKIP] Already processing: ${folderPath}`);
+      return;
+    }
+
+    this.processingFolders.add(folderPath);
+    console.log(`[WATCHER DEBUG] [QUEUE] Added to processing: ${folderPath}`);
+
     try {
-      console.log(`[WATCHER DEBUG] onNewFolder called for: ${folderPath}, waiting ${this.autoStyleDelay}ms`);
-      // Wait for the user to finish typing the folder name
-      await new Promise((resolve) => setTimeout(resolve, this.autoStyleDelay));
-
-      if (!fs.existsSync(folderPath)) {
-        console.log(`[WATCHER DEBUG] Folder does not exist after delay: ${folderPath}`);
-        return; // Skip if deleted before we style
+      // Calculate stability target: how many 1s checks of identical modification time are needed
+      const targetStableCount = Math.max(1, Math.round(this.autoStyleDelay / 1000));
+      let lastModTime = 0;
+      try {
+        if (fs.existsSync(folderPath)) {
+          lastModTime = fs.statSync(folderPath).mtimeMs;
+        } else {
+          console.log(`[WATCHER DEBUG] [SKIP] Folder does not exist: ${folderPath}`);
+          return;
+        }
+      } catch (e: any) {
+        console.log(`[WATCHER DEBUG] [SKIP] Error checking folder stats: ${e.message}`);
+        return;
       }
 
-      if (this.isSystemFolder(folderPath)) {
-        console.log(`[WATCHER DEBUG] Ignored system folder: ${folderPath}`);
-        return; // Ignore system folders
+      let stableCount = 0;
+      console.log(`[WATCHER DEBUG] [WAIT] Waiting for folder to stabilize (${targetStableCount}s stability target)...`);
+
+      while (stableCount < targetStableCount) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        if (!fs.existsSync(folderPath)) {
+          console.log(`[WATCHER DEBUG] [SKIP] Folder no longer exists: ${folderPath}`);
+          return;
+        }
+
+        try {
+          const currentModTime = fs.statSync(folderPath).mtimeMs;
+          if (currentModTime === lastModTime) {
+            stableCount++;
+          } else {
+            stableCount = 0;
+            lastModTime = currentModTime;
+          }
+        } catch (e: any) {
+          console.log(`[WATCHER DEBUG] [SKIP] Error statting folder during wait: ${e.message}`);
+          return;
+        }
       }
 
-      const folderName = path.basename(folderPath);
-      console.log(`[WATCHER DEBUG] Folder exists, sending watcher:new-folder IPC for: ${folderPath} (${folderName})`);
+      const currentFolderName = path.basename(folderPath);
+      if (this.isSkippableFolder(folderPath, currentFolderName)) {
+        console.log(`[WATCHER DEBUG] [SKIP] Skipping folder after stability check: ${currentFolderName}`);
+        return;
+      }
+
+      console.log(`[WATCHER DEBUG] [SUCCESS] Folder exists, sending watcher:new-folder IPC for: ${folderPath} (${currentFolderName})`);
 
       // Send message to renderer
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send("watcher:new-folder", {
           folderPath,
-          folderName
+          folderName: currentFolderName
         });
       }
     } catch (err: any) {
-      console.error("Error handling new folder detection:", err);
+      console.error(`[WATCHER DEBUG] [ERROR] Error handling new folder detection:`, err);
+    } finally {
+      this.processingFolders.delete(folderPath);
+      console.log(`[WATCHER DEBUG] [DONE] Removed from processing: ${folderPath}`);
     }
   }
 }
