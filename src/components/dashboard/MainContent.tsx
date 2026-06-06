@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Clock,
   FolderOpen,
@@ -48,6 +48,16 @@ export function MainContent() {
   const [subdirs, setSubdirs] = useState<any[]>([]);
 
   const triggerRefresh = () => setHistoryVersion((v) => v + 1);
+
+  // Keep callbacks fresh for the global event listener
+  useEffect(() => {
+    (window as any).__watcherCallbacks = {
+      settings,
+      setToast,
+      setIsBgStyling,
+      triggerRefresh
+    };
+  }, [settings]);
 
   // Sync subdirectories list when history or operations occur
   useEffect(() => {
@@ -179,74 +189,105 @@ export function MainContent() {
       "watcher:new-folder",
       async (_event, data: { folderPath: string; folderName: string }) => {
         const { folderPath, folderName } = data;
-        setIsBgStyling(true);
+        const callbacks = (window as any).__watcherCallbacks;
+        if (!callbacks) return;
+        const { settings: currentSettings, setToast: currentSetToast, setIsBgStyling: currentSetIsBgStyling, triggerRefresh: currentTriggerRefresh } = callbacks;
+
+        currentSetIsBgStyling(true);
 
         try {
           const match = matchIconToFolderName(folderName, ALL_ICONS);
-          if (!match) return;
+          
+          let targetIconId = "folder";
+          let targetColor = currentSettings.lastColor;
+          let shouldApply = false;
+          let confidence = 0;
+          let suggestedName = "Folder";
 
-          const color = suggestComplementaryColor(match.icon);
+          if (match && match.confidence >= 75) {
+            targetIconId = match.icon.id;
+            targetColor = suggestComplementaryColor(match.icon);
+            shouldApply = true;
+            confidence = match.confidence;
+            suggestedName = match.icon.name;
+          } else if (currentSettings.autoApply) {
+            targetIconId = "folder";
+            targetColor = currentSettings.lastColor;
+            shouldApply = true;
+            confidence = match ? match.confidence : 0;
+            suggestedName = match ? match.icon.name : "Folder";
+          }
 
-          if (match.confidence >= 75) {
-            const { pixels, dataUrl } = await drawFolderIconToCanvas(color, match.icon.id);
+          if (shouldApply) {
+            const { pixels, dataUrl } = await drawFolderIconToCanvas(targetColor, targetIconId);
 
             const result = await window.tintd.ipcRenderer.invoke("applyFolderIcon", {
               folderPath,
               canvasImageData: Array.from(pixels),
               canvasDataUrl: dataUrl,
-              selectedIcon: match.icon.id,
-              selectedColor: color,
+              selectedIcon: targetIconId,
+              selectedColor: targetColor,
             });
 
             if (result.success) {
               await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
                 folderPath,
                 folderName,
-                suggestedIcon: match.icon.name,
-                appliedColor: color,
-                confidence: match.confidence,
+                suggestedIcon: suggestedName,
+                appliedColor: targetColor,
+                confidence: confidence,
                 status: "success"
               });
 
-              setToast({
-                message: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
+              currentSetToast({
+                message: `✓ ${folderName} auto-styled!`,
                 type: "info",
-                iconId: match.icon.id
+                iconId: targetIconId
               });
-              setTimeout(() => setToast(null), 5000);
+              setTimeout(() => currentSetToast(null), 5000);
 
               if (Notification.permission === "granted") {
                 new Notification("Folder Auto-Styled", {
-                  body: `✓ ${folderName} auto-styled with ${match.icon.name} icon!`,
+                  body: `✓ ${folderName} auto-styled!`,
                 });
               }
 
-              triggerRefresh();
+              currentTriggerRefresh();
             } else {
               await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
                 folderPath,
                 folderName,
-                suggestedIcon: match.icon.name,
-                appliedColor: color,
-                confidence: match.confidence,
+                suggestedIcon: suggestedName,
+                appliedColor: targetColor,
+                confidence: confidence,
                 status: "error"
               });
             }
-          } else if (match.confidence >= 50) {
+          } else if (match && match.confidence >= 50) {
             await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
               folderPath,
               folderName,
               suggestedIcon: match.icon.name,
-              appliedColor: color,
+              appliedColor: suggestComplementaryColor(match.icon),
               confidence: match.confidence,
               status: "skipped"
             });
-            triggerRefresh();
+            currentTriggerRefresh();
           }
         } catch (err: any) {
           console.error("Folder watcher auto-styling error:", err);
         } finally {
-          setIsBgStyling(false);
+          currentSetIsBgStyling(false);
+        }
+      }
+    );
+
+    window.tintd.ipcRenderer.on(
+      "watcher:folder-deleted",
+      () => {
+        const callbacks = (window as any).__watcherCallbacks;
+        if (callbacks) {
+          callbacks.triggerRefresh();
         }
       }
     );

@@ -257,8 +257,8 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
             icon={Wand2}
             label="Auto-apply Icons"
             description="Automatically apply the last used color to new folders"
-            checked={settings.keepIconCopy}
-            onCheckedChange={(v) => onUpdateSetting("keepIconCopy", v)}
+            checked={settings.autoApply}
+            onCheckedChange={(v) => onUpdateSetting("autoApply", v)}
           />
           <SettingRow
             id="settings-keep-copy"

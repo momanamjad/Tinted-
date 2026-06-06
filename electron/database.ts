@@ -8,7 +8,8 @@ const DEFAULT_SETTINGS: Settings = {
   autoRefreshExplorer: true,
   lastColor: "#22c55e",
   iconStyle: "classic",
-  keepIconCopy: true
+  keepIconCopy: true,
+  autoApply: false
 };
 
 export class AppDatabase {

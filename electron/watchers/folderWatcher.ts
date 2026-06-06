@@ -8,9 +8,14 @@ export class FolderWatcher {
   private watchers = new Map<string, FSWatcher>();
   private autoStyleDelay: number = 3000;
   private processingFolders = new Set<string>();
+  private onDeletedCallback: ((dirPath: string) => Promise<void> | void) | null = null;
 
   constructor(mainWindow: BrowserWindow | null = null) {
     this.mainWindow = mainWindow;
+  }
+
+  setOnFolderDeleted(callback: (dirPath: string) => Promise<void> | void): void {
+    this.onDeletedCallback = callback;
   }
 
   setMainWindow(mainWindow: BrowserWindow) {
@@ -78,6 +83,17 @@ export class FolderWatcher {
       watcher.on("addDir", async (dirPath) => {
         console.log(`[WATCHER DEBUG] addDir event fired for: ${dirPath}`);
         await this.onNewFolder(dirPath);
+      });
+
+      watcher.on("unlinkDir", async (dirPath) => {
+        console.log(`[WATCHER DEBUG] unlinkDir event fired for: ${dirPath}`);
+        if (this.onDeletedCallback) {
+          try {
+            await this.onDeletedCallback(dirPath);
+          } catch (err) {
+            console.error("Error in onDeletedCallback:", err);
+          }
+        }
       });
 
       watcher.on("error", (error) => {

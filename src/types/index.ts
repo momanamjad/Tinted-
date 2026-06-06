@@ -8,6 +8,7 @@ export type Settings = {
   lastColor: string;
   iconStyle: IconStyle;
   keepIconCopy: boolean;
+  autoApply: boolean;
 };
 
 export type SettingValue = Settings[keyof Settings];

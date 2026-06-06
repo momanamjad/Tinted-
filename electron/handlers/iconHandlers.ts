@@ -79,11 +79,8 @@ export function registerIconHandlers(db: any) {
         }
       }
 
-      // Wait 1s to let the OS flush attributes and desktop.ini writes
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Silently notify Windows Shell to redraw the folder icon
-      await refreshWindowsShell(folderPath);
+      // Silently notify Windows Shell to redraw the folder icon (handled in background with retries)
+      refreshWindowsShell(folderPath).catch(() => {});
 
       return {
         success: true,
@@ -132,11 +129,8 @@ export function registerIconHandlers(db: any) {
       // 5. Delete entry from SQLite
       db.removeFolderCustomization(folderPath);
 
-      // Wait 1s to let the OS flush attribute removals
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Notify Windows Shell to refresh
-      await refreshWindowsShell(folderPath);
+      // Notify Windows Shell to refresh (handled in background with retries)
+      refreshWindowsShell(folderPath).catch(() => {});
 
       return { success: true, message: "Icon removed successfully!" };
     } catch (error: any) {

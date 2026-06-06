@@ -168,6 +168,40 @@ app.whenReady().then(async () => {
 
   db = await AppDatabase.open(app.getPath("userData"), defaultWatchPaths);
   folderWatcher = new FolderWatcher(null);
+
+  folderWatcher.setOnFolderDeleted(async (dirPath) => {
+    try {
+      // Double check if the folder actually got deleted/renamed (avoid spurious Chokidar events)
+      let exists = false;
+      try {
+        await fs.access(dirPath);
+        exists = true;
+      } catch (err: any) {
+        // If the error code is NOT ENOENT, it means the folder still exists but might be locked or inaccessible
+        if (err.code !== "ENOENT") {
+          exists = true;
+        }
+      }
+
+      if (exists) {
+        return;
+      }
+
+      const customization = db.getFolderCustomization(dirPath);
+      if (customization && customization.icoPath) {
+        await fs.rm(customization.icoPath, { force: true });
+      }
+      db.removeFolderCustomization(dirPath);
+      
+      // Notify renderer so it can refresh its folders list
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("watcher:folder-deleted", { folderPath: dirPath });
+      }
+    } catch (e) {
+      log.error("Error cleaning up deleted folder customization:", e);
+    }
+  });
+
   registerIpc();
   await createWindow();
 

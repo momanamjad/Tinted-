@@ -76,39 +76,48 @@ export async function unsetFolderSystem(folderPath: string): Promise<boolean> {
 }
 
 /**
- * Silently tell Windows Explorer to redraw icons for the given folder.
- * Uses SHChangeNotify only — never opens an Explorer window.
+ * Force Windows Explorer to repaint a folder's custom icon.
+ *
+ * Strategy: Toggle the folder's Read-only attribute off then on.
+ * This creates a filesystem change event that Explorer cannot ignore,
+ * forcing it to re-read the desktop.ini and display the custom icon.
+ * Then call ie4uinit.exe -show to flush the icon cache.
+ *
+ * Runs a background retry loop (0s, 2s, 5s) to handle Explorer's
+ * selection lock on newly created/renamed folders.
  */
 export async function refreshWindowsShell(folderPath?: string): Promise<void> {
-  // Build a PowerShell script that calls SHChangeNotify silently.
-  // SHCNE_UPDATEITEM   0x00002000 – the folder's own icon changed
-  // SHCNE_UPDATEDIR    0x00001000 – contents of parent dir changed
-  // SHCNE_ASSOCCHANGED 0x08000000 – flush all shell associations / icon cache
-  // SHCNF_PATHW        0x0005     – item1/item2 are Unicode paths
-  let script = `
-$sig = '[System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern void SHChangeNotify(uint wEventId, uint uFlags, string dwItem1, string dwItem2);'
-Add-Type -MemberDefinition $sig -Name Shell -Namespace TintdShell -ErrorAction SilentlyContinue
-`;
-
-  if (folderPath) {
-    // Escape backslashes for PowerShell string
-    const ps = folderPath.replace(/\\/g, "\\\\");
-    const pp = path.dirname(folderPath).replace(/\\/g, "\\\\");
-    script += `[TintdShell.Shell]::SHChangeNotify(0x00002000, 0x0005, "${ps}", $null)\n`;
-    script += `[TintdShell.Shell]::SHChangeNotify(0x00001000, 0x0005, "${pp}", $null)\n`;
+  if (!folderPath) {
+    // Global refresh only
+    try {
+      await execFilePromise("ie4uinit.exe", ["-show"]);
+    } catch (e) {
+      console.error("[refreshWindowsShell] ie4uinit failed:", e);
+    }
+    return;
   }
-  // Global flush – forces Explorer to repaint all affected items immediately
-  script += `[TintdShell.Shell]::SHChangeNotify(0x08000000, 0x0000, $null, $null)\n`;
 
-  try {
-    const base64 = Buffer.from(script, "utf16le").toString("base64");
-    const { exec } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    await promisify(exec)(
-      `powershell -NonInteractive -WindowStyle Hidden -EncodedCommand ${base64}`
-    );
-  } catch (e) {
-    console.error("[refreshWindowsShell] SHChangeNotify failed:", e);
-  }
+  const doRefresh = async () => {
+    try {
+      // 1. Briefly strip Read-only to create a change event Explorer will detect
+      await execFilePromise("attrib", ["-r", folderPath]);
+      // 2. Small delay so the OS registers the attribute change
+      await new Promise(r => setTimeout(r, 150));
+      // 3. Re-apply Read-only + System so Explorer re-reads desktop.ini
+      await execFilePromise("attrib", ["+r", "+s", folderPath]);
+      // 4. Flush icon cache
+      await execFilePromise("ie4uinit.exe", ["-show"]);
+    } catch (e) {
+      // Folder may have been deleted/moved — ignore
+    }
+  };
+
+  // Immediate attempt
+  doRefresh();
+
+  // Retry after 2 seconds (Explorer may still hold a selection lock)
+  setTimeout(() => doRefresh(), 2000);
+
+  // Final retry after 5 seconds (failsafe)
+  setTimeout(() => doRefresh(), 5000);
 }
-
