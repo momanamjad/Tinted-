@@ -2,6 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } fr
 import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import electronUpdaterPkg from "electron-updater";
+const { autoUpdater } = electronUpdaterPkg;
 import { AppDatabase } from "./database.js";
 import { applyFolderIcon, resetFolderIcon } from "./folder-icons.js";
 import type { ApplyIconRequest, Settings, SettingValue } from "./types.js";
@@ -216,6 +218,29 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       await createWindow();
     }
+  });
+
+  // Configure auto-updater
+  autoUpdater.logger = log;
+  autoUpdater.autoDownload = true;
+  
+  // Check for updates after a short delay so the app UI loads first
+  setTimeout(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch(err => log.error("Failed to check for updates:", err));
+  }, 5000);
+
+  // Prompt the user when an update is downloaded
+  autoUpdater.on('update-downloaded', (info) => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Ready',
+      message: 'A new version of Tintd Pro is ready. Restart the application to apply the updates.',
+      buttons: ['Restart', 'Later']
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
   });
 });
 
