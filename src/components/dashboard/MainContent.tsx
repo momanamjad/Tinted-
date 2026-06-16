@@ -179,11 +179,11 @@ export function MainContent() {
   useEffect(() => {
     if (!window.tintd?.ipcRenderer) return;
 
-    if ((window as any).__watcherRegistered) {
-      return;
+    // Always remove old listeners first to avoid duplicates
+    if (window.tintd.ipcRenderer.removeAllListeners) {
+      window.tintd.ipcRenderer.removeAllListeners("watcher:new-folder");
+      window.tintd.ipcRenderer.removeAllListeners("watcher:folder-deleted");
     }
-
-    (window as any).__watcherRegistered = true;
 
     window.tintd.ipcRenderer.on(
       "watcher:new-folder",
@@ -240,8 +240,8 @@ export function MainContent() {
               });
 
               currentSetToast({
-                message: `✓ ${folderName} auto-styled!`,
-                type: "info",
+                message: `✓ ${folderName} styled!`,
+                type: "success",
                 iconId: targetIconId
               });
               setTimeout(() => currentSetToast(null), 5000);
@@ -253,6 +253,14 @@ export function MainContent() {
               }
 
               currentTriggerRefresh();
+
+              // Restart Explorer to refresh Desktop
+              console.log("[RENDERER] Restarting Explorer to refresh Desktop...");
+              try {
+                await window.tintd.ipcRenderer.invoke("restartExplorer");
+              } catch (e: any) {
+                console.error("[RENDERER] Error restarting explorer:", e.message);
+              }
             } else {
               await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
                 folderPath,

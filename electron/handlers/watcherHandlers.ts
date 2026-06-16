@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow, type OpenDialogOptions } from "electron";
 import type { AppDatabase } from "../database.js";
 import type { FolderWatcher } from "../watchers/folderWatcher.js";
+import { execSync } from "node:child_process";
 
 export function registerWatcherHandlers(
   db: AppDatabase,
@@ -91,6 +92,28 @@ export function registerWatcherHandlers(
     } catch (err: any) {
       console.error("watcher:select-directory error:", err);
       return null;
+    }
+  });
+
+  ipcMain.handle("restartExplorer", async () => {
+    try {
+      console.log("[EXPLORER RESTART] Restarting Windows Explorer...");
+      
+      // Kill Explorer
+      execSync("taskkill /F /IM explorer.exe", { stdio: "pipe" });
+      
+      // Wait 500ms for cleanup
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      // Restart Explorer
+      execSync("start explorer.exe", { stdio: "pipe" });
+      
+      console.log("[EXPLORER RESTART] ✓ Explorer restarted successfully");
+      
+      return { success: true };
+    } catch (err: any) {
+      console.error("[EXPLORER RESTART] Error:", err.message);
+      return { success: false, error: err.message };
     }
   });
 }
