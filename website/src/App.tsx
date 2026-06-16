@@ -99,9 +99,26 @@ function App() {
               <Download className="w-5 h-5 relative z-10" />
               <span className="relative z-10">Download for Windows</span>
             </a>
-            <p className="text-xs sm:text-sm text-gray-500 mt-2 sm:mt-0 sm:ml-4 font-medium">
+            <p className="text-xs sm:text-sm text-gray-500 mt-2 sm:mt-0 sm:ml-4 font-medium text-left">
               Free & Open Source <br className="hidden sm:block" /> Windows 10/11
             </p>
+          </motion.div>
+
+          <motion.div variants={fadeUp} className="mt-6 max-w-xl mx-auto px-4">
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-left">
+              <p className="text-yellow-200/90 text-sm font-medium mb-2 flex items-center gap-2">
+                <Shield className="w-4 h-4" /> Installation Note
+              </p>
+              <p className="text-gray-400 text-xs leading-relaxed mb-3">
+                Windows may show a <strong>"Windows protected your PC"</strong> screen because this is a new open-source app. Click <strong>"More info"</strong> then <strong>"Run anyway"</strong> to install.
+              </p>
+              <div className="bg-black/50 rounded-lg p-2 flex items-center justify-between border border-white/5">
+                <code className="text-[10px] text-gray-300 font-mono">
+                  powershell -command "Unblock-File -Path '.\Tintd Pro-Setup.exe'"
+                </code>
+                <span className="text-[10px] text-gray-500 ml-2">(Optional bypass)</span>
+              </div>
+            </div>
           </motion.div>
           
           {/* Mockup Area */}
