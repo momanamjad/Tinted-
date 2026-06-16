@@ -1,10 +1,13 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #09090b;
-  --color-foreground: #fafafa;
-  --color-primary: #22c55e;
-  --color-primary-hover: #16a34a;
+  --color-background: #000000;
+  --color-foreground: #ffffff;
+  --color-primary: #6366f1; /* Indigo 500 */
+  --color-primary-hover: #4f46e5; /* Indigo 600 */
+  --color-accent: #8b5cf6; /* Violet 500 */
+  
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 @layer base {
@@ -13,5 +16,13 @@
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Subtle dot grid background for a premium dev-tool look */
+    background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 32px 32px;
   }
+}
+
+/* Custom glow utility */
+.glow-effect {
+  box-shadow: 0 0 40px -10px var(--color-primary);
 }
