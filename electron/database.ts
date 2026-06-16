@@ -204,6 +204,10 @@ export class AppDatabase {
         timestamp TEXT NOT NULL,
         status TEXT NOT NULL
       );
+
+      CREATE INDEX IF NOT EXISTS idx_fc_folderPath ON folder_customizations(folderPath);
+      CREATE INDEX IF NOT EXISTS idx_wa_timestamp ON watcher_activity(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_ij_folderPath ON icon_jobs(folderPath);
     `);
 
     try {
@@ -298,6 +302,9 @@ export class AppDatabase {
       }
     );
     this.persist();
+
+    // Prune activity entries older than 30 days
+    this.run("DELETE FROM watcher_activity WHERE datetime(timestamp) < datetime('now', '-30 days')");
   }
 
   private ensureDefaults() {

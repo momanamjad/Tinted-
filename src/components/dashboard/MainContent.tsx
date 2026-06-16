@@ -255,7 +255,6 @@ export function MainContent() {
               currentTriggerRefresh();
 
               // Restart Explorer to refresh Desktop
-              console.log("[RENDERER] Restarting Explorer to refresh Desktop...");
               try {
                 await window.tintd.ipcRenderer.invoke("restartExplorer");
               } catch (e: any) {

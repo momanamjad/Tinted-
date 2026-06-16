@@ -72,7 +72,6 @@ export class FolderWatcher {
         return;
       }
 
-      console.log(`[WATCHER DEBUG] Setting up Chokidar on: ${watchPath}`);
       const watcher = chokidar.watch(watchPath, {
         ignored: /(^|[\/\\])\..|node_modules|\.tmp$/, // ignore hidden files/folders, node_modules, temp files
         persistent: true,
@@ -81,12 +80,10 @@ export class FolderWatcher {
       });
 
       watcher.on("addDir", async (dirPath) => {
-        console.log(`[WATCHER DEBUG] addDir event fired for: ${dirPath}`);
         await this.onNewFolder(dirPath);
       });
 
       watcher.on("unlinkDir", async (dirPath) => {
-        console.log(`[WATCHER DEBUG] unlinkDir event fired for: ${dirPath}`);
         if (this.onDeletedCallback) {
           try {
             await this.onDeletedCallback(dirPath);
@@ -165,19 +162,16 @@ export class FolderWatcher {
     const folderName = path.basename(folderPath);
 
     if (this.isSkippableFolder(folderPath, folderName)) {
-      console.log(`[WATCHER DEBUG] [SKIP] Skipping folder: ${folderName}`);
       return;
     }
 
-    console.log(`[WATCHER DEBUG] [START] Processing: ${folderPath}`);
+
 
     if (this.processingFolders.has(folderPath)) {
-      console.log(`[WATCHER DEBUG] [SKIP] Already processing: ${folderPath}`);
       return;
     }
 
     this.processingFolders.add(folderPath);
-    console.log(`[WATCHER DEBUG] [QUEUE] Added to processing: ${folderPath}`);
 
     try {
       // Calculate stability target: how many 1s checks of identical modification time are needed
@@ -187,22 +181,19 @@ export class FolderWatcher {
         if (fs.existsSync(folderPath)) {
           lastModTime = fs.statSync(folderPath).mtimeMs;
         } else {
-          console.log(`[WATCHER DEBUG] [SKIP] Folder does not exist: ${folderPath}`);
           return;
         }
       } catch (e: any) {
-        console.log(`[WATCHER DEBUG] [SKIP] Error checking folder stats: ${e.message}`);
+
         return;
       }
 
       let stableCount = 0;
-      console.log(`[WATCHER DEBUG] [WAIT] Waiting for folder to stabilize (${targetStableCount}s stability target)...`);
 
       while (stableCount < targetStableCount) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         if (!fs.existsSync(folderPath)) {
-          console.log(`[WATCHER DEBUG] [SKIP] Folder no longer exists: ${folderPath}`);
           return;
         }
 
@@ -215,18 +206,17 @@ export class FolderWatcher {
             lastModTime = currentModTime;
           }
         } catch (e: any) {
-          console.log(`[WATCHER DEBUG] [SKIP] Error statting folder during wait: ${e.message}`);
+
           return;
         }
       }
 
       const currentFolderName = path.basename(folderPath);
       if (this.isSkippableFolder(folderPath, currentFolderName)) {
-        console.log(`[WATCHER DEBUG] [SKIP] Skipping folder after stability check: ${currentFolderName}`);
         return;
       }
 
-      console.log(`[WATCHER DEBUG] [SUCCESS] Folder exists, sending watcher:new-folder IPC for: ${folderPath} (${currentFolderName})`);
+
 
       // Send message to renderer
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -239,7 +229,6 @@ export class FolderWatcher {
       console.error(`[WATCHER DEBUG] [ERROR] Error handling new folder detection:`, err);
     } finally {
       this.processingFolders.delete(folderPath);
-      console.log(`[WATCHER DEBUG] [DONE] Removed from processing: ${folderPath}`);
     }
   }
 }

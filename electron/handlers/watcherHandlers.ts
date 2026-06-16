@@ -97,7 +97,7 @@ export function registerWatcherHandlers(
 
   ipcMain.handle("restartExplorer", async () => {
     try {
-      console.log("[EXPLORER RESTART] Restarting Windows Explorer...");
+
       
       // Kill Explorer
       execSync("taskkill /F /IM explorer.exe", { stdio: "pipe" });
@@ -108,7 +108,7 @@ export function registerWatcherHandlers(
       // Restart Explorer
       execSync("start explorer.exe", { stdio: "pipe" });
       
-      console.log("[EXPLORER RESTART] ✓ Explorer restarted successfully");
+
       
       return { success: true };
     } catch (err: any) {

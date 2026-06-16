@@ -15,23 +15,15 @@ export async function generateIcoFile(
   height: number,
   icoPath: string
 ): Promise<string> {
-  console.log("[GENERATE ICO] Starting ICO generation");
-  console.log("[GENERATE ICO]   Width:", width, "Height:", height);
-  console.log("[GENERATE ICO]   Pixel data length:", pixelData.length);
-  console.log("[GENERATE ICO]   Target path:", icoPath);
   
   const pixels = new Uint8ClampedArray(pixelData);
-  console.log("[GENERATE ICO]   Created Uint8ClampedArray, length:", pixels.length);
   
   const icoBuffer = makeIco(pixels);
-  console.log("[GENERATE ICO]   ICO buffer created, size:", icoBuffer.length, "bytes");
 
   // Ensure target directory exists
   await fs.mkdir(path.dirname(icoPath), { recursive: true });
-  console.log("[GENERATE ICO]   Directory ensured:", path.dirname(icoPath));
   
   await fs.writeFile(icoPath, icoBuffer);
-  console.log("[GENERATE ICO] ✓ ICO file written successfully");
 
   return icoPath;
 }
@@ -41,29 +33,18 @@ export async function generateIcoFile(
  * Handles removing previous read-only/hidden/system attributes first to avoid write block errors.
  */
 export async function createDesktopIni(folderPath: string, icoPath: string): Promise<boolean> {
-  console.log("[CREATE DESKTOP.INI] Starting");
-  console.log("[CREATE DESKTOP.INI]   Folder path:", folderPath);
-  console.log("[CREATE DESKTOP.INI]   Icon path:", icoPath);
-  
   const desktopIniPath = path.join(folderPath, "desktop.ini");
-  console.log("[CREATE DESKTOP.INI]   Target path:", desktopIniPath);
 
   // Temporarily strip attributes to allow overwrite
   try {
-    console.log("[CREATE DESKTOP.INI]   Removing existing attributes...");
     await execFilePromise("attrib", ["-h", "-s", desktopIniPath]);
-    console.log("[CREATE DESKTOP.INI] ✓ Attributes removed");
   } catch (e: any) {
-    console.log("[CREATE DESKTOP.INI]   File does not exist yet (OK):", e.message);
+    // File does not exist yet — OK
   }
 
   // Prepend UTF-8 BOM (\uFEFF) to ensure Windows Explorer parses it correctly
   const content = `\uFEFF[.ShellClassInfo]\r\nIconResource=${icoPath},0\r\nIconFile=${icoPath}\r\nIconIndex=0\r\n`;
-  console.log("[CREATE DESKTOP.INI]   Content length:", content.length);
-  console.log("[CREATE DESKTOP.INI]   Content preview:", content.substring(0, 80));
-  
   await fs.writeFile(desktopIniPath, content, "utf8");
-  console.log("[CREATE DESKTOP.INI] ✓ desktop.ini file written");
 
   return true;
 }
@@ -72,10 +53,8 @@ export async function createDesktopIni(folderPath: string, icoPath: string): Pro
  * Make desktop.ini hidden and system-protected so it is invisible to users by default.
  */
 export async function setFileHidden(filePath: string): Promise<boolean> {
-  console.log("[SET FILE HIDDEN] Setting attributes on:", filePath);
   try {
     await execFilePromise("attrib", ["+h", "+s", filePath]);
-    console.log("[SET FILE HIDDEN] ✓ File attributes set");
     return true;
   } catch (e: any) {
     console.error("[SET FILE HIDDEN] ✗ Error:", e.message);
@@ -87,20 +66,15 @@ export async function setFileHidden(filePath: string): Promise<boolean> {
  * Enable the system/readonly flag on the folder path, which triggers Windows to look for desktop.ini.
  */
 export async function setFolderSystem(folderPath: string): Promise<boolean> {
-  console.log("[SET FOLDER SYSTEM] Setting system flag on:", folderPath);
   // Clear attributes first to force Windows Explorer to detect a change event when we re-apply them
   try {
-    console.log("[SET FOLDER SYSTEM]   Clearing existing attributes...");
     await execFilePromise("attrib", ["-r", "-s", folderPath]);
-    console.log("[SET FOLDER SYSTEM] ✓ Attributes cleared");
   } catch (e: any) {
-    console.warn("[SET FOLDER SYSTEM]   Warning clearing attributes:", e.message);
+    // Warning clearing attributes — non-critical
   }
   // Set both Read-only and System attributes to trigger reload
   try {
-    console.log("[SET FOLDER SYSTEM]   Applying system + read-only attributes...");
     await execFilePromise("attrib", ["+r", "+s", folderPath]);
-    console.log("[SET FOLDER SYSTEM] ✓ Folder system attribute set");
     return true;
   } catch (e: any) {
     console.error("[SET FOLDER SYSTEM] ✗ Error:", e.message);
@@ -112,10 +86,8 @@ export async function setFolderSystem(folderPath: string): Promise<boolean> {
  * Disable the system/readonly flag on the folder path when removing customization.
  */
 export async function unsetFolderSystem(folderPath: string): Promise<boolean> {
-  console.log("[UNSET FOLDER SYSTEM] Removing system flag from:", folderPath);
   try {
     await execFilePromise("attrib", ["-r", "-s", folderPath]);
-    console.log("[UNSET FOLDER SYSTEM] ✓ Folder system attribute removed");
     return true;
   } catch (e: any) {
     console.error("[UNSET FOLDER SYSTEM] ✗ Error:", e.message);
@@ -149,7 +121,6 @@ export async function refreshWindowsShell(folderPath?: string): Promise<void> {
     // Global refresh only
     try {
       await execFilePromise("ie4uinit.exe", ["-show"]);
-      console.log("[REFRESH] Global icon cache flushed");
     } catch (e) {
       console.error("[REFRESH] ie4uinit failed:", e);
     }
@@ -169,11 +140,8 @@ export async function refreshWindowsShell(folderPath?: string): Promise<void> {
       await execFilePromise("attrib", ["+r", "+s", folderPath]);
       // 4. Flush icon cache globally
       await execFilePromise("ie4uinit.exe", ["-show"]);
-      
-      console.log(`[REFRESH] Attempt ${attemptCount}: Icon refresh sent to Explorer`);
     } catch (e) {
       // Folder may have been deleted/moved — ignore silently
-      console.log(`[REFRESH] Attempt ${attemptCount}: Folder not accessible (this is OK)`);
     }
   };
 
