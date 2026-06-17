@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Download, FolderOpen, PaintBucket, Zap, Shield, ArrowRight, Code2, Layers, Cpu, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -17,6 +18,21 @@ const staggerContainer = {
 };
 
 function App() {
+  const [latestVersion, setLatestVersion] = useState<string>('');
+
+  useEffect(() => {
+    fetch('https://api.github.com/repos/momanamjad/Tinted-/releases/latest')
+      .then(res => res.json())
+      .then(data => {
+        if (data.tag_name) {
+          setLatestVersion(data.tag_name);
+        }
+      })
+      .catch(() => {
+        // Silently fail — badge just won't show
+      });
+  }, []);
+
   return (
     <div className="min-h-screen font-sans selection:bg-primary/30">
       
@@ -70,12 +86,14 @@ function App() {
           animate="visible"
           className="max-w-7xl mx-auto relative z-10 text-center"
         >
+          {latestVersion && (
           <motion.div variants={fadeUp} className="mb-6 flex justify-center">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300 font-medium">
               <Sparkles className="w-4 h-4 text-accent" />
-              Tintd Pro v0.1.0 is now available
+              Tintd Pro {latestVersion} is now available
             </span>
           </motion.div>
+          )
           
           <motion.h1 variants={fadeUp} className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight mb-6 sm:mb-8 leading-tight">
             Customize Windows <br className="hidden md:block" />
