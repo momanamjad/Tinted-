@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session, shell, type OpenDialogOptions } from "electron";
 import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -202,6 +202,20 @@ app.whenReady().then(async () => {
     } catch (e) {
       log.error("Error cleaning up deleted folder customization:", e);
     }
+  });
+
+  // Set CSP via session headers (works correctly with file:// protocol)
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          app.isPackaged
+            ? "default-src 'self' file:; script-src 'self' 'unsafe-inline' 'unsafe-eval' file:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com file:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' blob: data: file:;"
+            : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5173; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws://localhost:5173 http://localhost:5173; img-src 'self' blob: data:;"
+        ]
+      }
+    });
   });
 
   registerIpc();
