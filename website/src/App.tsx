@@ -93,8 +93,7 @@ function App() {
               Tintd Pro {latestVersion} is now available
             </span>
           </motion.div>
-          )
-          
+          )}
           <motion.h1 variants={fadeUp} className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight mb-6 sm:mb-8 leading-tight">
             Customize Windows <br className="hidden md:block" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
