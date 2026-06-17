@@ -4,7 +4,15 @@ import path from "node:path";
 
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "remove-crossorigin",
+      transformIndexHtml(html) {
+        return html.replace(/ crossorigin/g, "");
+      }
+    }
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src")

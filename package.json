@@ -1,6 +1,6 @@
 {
   "name": "tintd-pro",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Tintd Pro (Windows Edition) desktop app for customizing Windows folder icons.",
   "author": "Moman Amjad",
   "license": "MIT",
@@ -103,7 +103,8 @@
       {
         "provider": "github",
         "owner": "momanamjad",
-        "repo": "Tinted-"
+        "repo": "Tinted-",
+        "releaseType": "release"
       }
     ]
   }
