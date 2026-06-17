@@ -19,7 +19,7 @@ let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
 let folderWatcher: FolderWatcher;
 
-async function createWindow() {
+async function createWindow(isHidden: boolean = false) {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -38,7 +38,9 @@ async function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+    if (!isHidden) {
+      mainWindow?.show();
+    }
     if (mainWindow) {
       folderWatcher.setMainWindow(mainWindow);
     }
@@ -154,8 +156,22 @@ function registerIpc() {
   });
 }
 
-app.whenReady().then(async () => {
-  log.initialize();
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Someone tried to run a second instance, we should focus our window.
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(async () => {
+    log.initialize();
   
   const defaultWatchPaths: string[] = [];
   try {
@@ -219,7 +235,15 @@ app.whenReady().then(async () => {
   });
 
   registerIpc();
-  await createWindow();
+
+  // Configure auto-start on boot
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    args: ["--hidden"]
+  });
+
+  // Check if launched on startup
+  const isHiddenLaunch = process.argv.includes("--hidden");
 
   // Load watcher settings on boot
   const wSettings = db.getWatcherSettings();
@@ -227,6 +251,9 @@ app.whenReady().then(async () => {
   if (wSettings.isEnabled) {
     folderWatcher.start(wSettings.watchPaths);
   }
+
+  // Create the window but don't show it if it's a hidden launch
+  await createWindow(isHiddenLaunch);
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -263,3 +290,5 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+} // End of single instance lock
