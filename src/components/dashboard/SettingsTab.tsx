@@ -160,6 +160,52 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
     fetchWatcherStatus();
   };
 
+  const handleClearData = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    if (window.confirm("Are you sure you want to clear all data? This will remove all history and reset settings to default. The application will reload.")) {
+      try {
+        await window.tintd.ipcRenderer.invoke("data:clear-all");
+        window.location.reload();
+      } catch (err) {
+        console.error("Failed to clear data:", err);
+      }
+    }
+  };
+
+  const handleResetIcons = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    if (window.confirm("Are you sure you want to reset all styled folders back to default? This may take some time. The application will reload once complete.")) {
+      try {
+        await window.tintd.ipcRenderer.invoke("data:reset-icons");
+        window.location.reload();
+      } catch (err) {
+        console.error("Failed to reset icons:", err);
+        window.alert("Failed to reset icons. See console for details.");
+      }
+    }
+  };
+
+  const handleExport = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    try {
+      await window.tintd.ipcRenderer.invoke("data:export-settings");
+    } catch (err) {
+      console.error("Failed to export settings:", err);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    try {
+      const success = await window.tintd.ipcRenderer.invoke("data:import-settings");
+      if (success) {
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error("Failed to import settings:", err);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-5 overflow-auto pb-4">
       {/* Section: Appearance */}
@@ -405,6 +451,45 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
 
       <Separator className="opacity-30" />
 
+      {/* Section: Data Management */}
+      <Card className="border-border/60 bg-card/40">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Download className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-semibold">Data Management</CardTitle>
+          </div>
+          <CardDescription className="text-[12px]">
+            Export or import your settings and configurations
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              id="settings-export"
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              className="gap-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export Settings
+            </Button>
+            <Button
+              id="settings-import"
+              variant="outline"
+              size="sm"
+              onClick={handleImport}
+              className="gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Import Settings
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Separator className="opacity-30" />
+
       {/* Danger Zone */}
       <Card className="border-destructive/20 bg-destructive/5">
         <CardHeader className="pb-3">
@@ -422,6 +507,7 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
               id="settings-clear-data"
               variant="outline"
               size="sm"
+              onClick={handleClearData}
               className="gap-2 border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -431,28 +517,11 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
               id="settings-reset-icons"
               variant="outline"
               size="sm"
+              onClick={handleResetIcons}
               className="gap-2 border-orange-500/30 text-orange-500 hover:bg-orange-500 hover:text-white"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Reset All Icons
-            </Button>
-            <Button
-              id="settings-export"
-              variant="outline"
-              size="sm"
-              className="gap-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export Settings
-            </Button>
-            <Button
-              id="settings-import"
-              variant="outline"
-              size="sm"
-              className="gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              Import Settings
             </Button>
           </div>
         </CardContent>

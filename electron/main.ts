@@ -19,7 +19,7 @@ let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
 let folderWatcher: FolderWatcher;
 
-async function createWindow(isHidden: boolean = false) {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -38,9 +38,7 @@ async function createWindow(isHidden: boolean = false) {
   });
 
   mainWindow.once("ready-to-show", () => {
-    if (!isHidden) {
-      mainWindow?.show();
-    }
+    mainWindow?.show();
     if (mainWindow) {
       folderWatcher.setMainWindow(mainWindow);
     }
@@ -154,24 +152,80 @@ function registerIpc() {
     const record = await resetFolderIcon(folderPath);
     return db.upsertIconRecord(record);
   });
-}
 
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    // Someone tried to run a second instance, we should focus our window.
-    if (mainWindow) {
-      if (!mainWindow.isVisible()) mainWindow.show();
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+  ipcMain.handle("data:clear-all", async () => {
+    db.clearAllData();
+    return true;
   });
 
-  app.whenReady().then(async () => {
-    log.initialize();
+  ipcMain.handle("data:reset-icons", async () => {
+    const customizations = db.getAllCustomizations();
+    for (const customization of customizations) {
+      const folderPath = customization.folderPath;
+      const desktopIniPath = path.join(folderPath, "desktop.ini");
+      try {
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        await promisify(execFile)("attrib", ["-h", "-s", desktopIniPath]);
+        await fs.rm(desktopIniPath, { force: true });
+      } catch (e) {}
+
+      try {
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        await promisify(execFile)("attrib", ["-r", "-s", folderPath]);
+      } catch (e) {}
+
+      if (customization.icoPath) {
+        await fs.rm(customization.icoPath, { force: true }).catch(() => {});
+      }
+      db.removeFolderCustomization(folderPath);
+      await resetFolderIcon(folderPath);
+    }
+    db.clearAllData(); // Optionally clear everything else as well
+    return true;
+  });
+
+  ipcMain.handle("data:export-settings", async () => {
+    const { dialog } = await import("electron");
+    const { filePath } = await dialog.showSaveDialog({
+      title: "Export Settings",
+      defaultPath: "tintd-settings.json",
+      filters: [{ name: "JSON Files", extensions: ["json"] }]
+    });
+    if (filePath) {
+      const settings = db.getSettings();
+      await fs.writeFile(filePath, JSON.stringify(settings, null, 2), "utf8");
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle("data:import-settings", async () => {
+    const { dialog } = await import("electron");
+    const { filePaths } = await dialog.showOpenDialog({
+      title: "Import Settings",
+      filters: [{ name: "JSON Files", extensions: ["json"] }],
+      properties: ["openFile"]
+    });
+    if (filePaths && filePaths.length > 0) {
+      try {
+        const content = await fs.readFile(filePaths[0], "utf8");
+        const settings = JSON.parse(content);
+        for (const [key, value] of Object.entries(settings)) {
+          db.setSetting(key as any, value as any);
+        }
+        return true;
+      } catch (err) {
+        console.error("Failed to import settings:", err);
+      }
+    }
+    return false;
+  });
+}
+
+app.whenReady().then(async () => {
+  log.initialize();
   
   const defaultWatchPaths: string[] = [];
   try {
@@ -235,15 +289,7 @@ if (!gotTheLock) {
   });
 
   registerIpc();
-
-  // Configure auto-start on boot
-  app.setLoginItemSettings({
-    openAtLogin: true,
-    args: ["--hidden"]
-  });
-
-  // Check if launched on startup
-  const isHiddenLaunch = process.argv.includes("--hidden");
+  await createWindow();
 
   // Load watcher settings on boot
   const wSettings = db.getWatcherSettings();
@@ -251,9 +297,6 @@ if (!gotTheLock) {
   if (wSettings.isEnabled) {
     folderWatcher.start(wSettings.watchPaths);
   }
-
-  // Create the window but don't show it if it's a hidden launch
-  await createWindow(isHiddenLaunch);
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -290,5 +333,3 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
-
-} // End of single instance lock

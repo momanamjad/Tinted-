@@ -158,6 +158,27 @@ export class AppDatabase {
     }>("SELECT id, folderPath, icoPath, selectedIcon, selectedColor, appliedDate FROM folder_customizations ORDER BY datetime(appliedDate) DESC LIMIT 50");
   }
 
+  getAllCustomizations() {
+    return this.all<{
+      id: number;
+      folderPath: string;
+      icoPath: string;
+      selectedIcon: string;
+      selectedColor: string;
+      appliedDate: string;
+    }>("SELECT * FROM folder_customizations");
+  }
+
+  clearAllData() {
+    this.run("DELETE FROM icon_jobs");
+    this.run("DELETE FROM folder_customizations");
+    this.run("DELETE FROM watcher_activity");
+    this.run("DELETE FROM settings");
+    this.run("DELETE FROM watcher_settings");
+    this.persist();
+    this.ensureDefaults();
+  }
+
   private migrate() {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS settings (

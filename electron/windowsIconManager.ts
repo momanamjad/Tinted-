@@ -117,22 +117,40 @@ export async function unsetFolderSystem(folderPath: string): Promise<boolean> {
  * is deselected or after a few seconds. This is Windows Explorer's normal behavior.
  */
 export async function refreshWindowsShell(folderPath?: string): Promise<void> {
-  const ps1Path = path.join(__dirname, "refresh-icon.ps1");
-  
-  try {
-    const args = ["-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", ps1Path];
-    if (folderPath) {
-      args.push("-FolderPath", folderPath);
+  if (!folderPath) {
+    // Global refresh only
+    try {
+      await execFilePromise("ie4uinit.exe", ["-show"]);
+    } catch (e) {
+      console.error("[REFRESH] ie4uinit failed:", e);
     }
-    
-    // Execute asynchronously and don't block
-    const { execFile } = await import("node:child_process");
-    execFile("powershell.exe", args, (error) => {
-      if (error) {
-        console.error("[REFRESH] PowerShell refresh script failed:", error);
-      }
-    });
-  } catch (e) {
-    console.error("[REFRESH] Failed to execute refresh script:", e);
+    return;
   }
+
+  let attemptCount = 0;
+
+  const doRefresh = async () => {
+    attemptCount++;
+    try {
+      // 1. Briefly strip Read-only to create a change event Explorer will detect
+      await execFilePromise("attrib", ["-r", folderPath]);
+      // 2. Small delay so the OS registers the attribute change
+      await new Promise(r => setTimeout(r, 150));
+      // 3. Re-apply Read-only + System so Explorer re-reads desktop.ini
+      await execFilePromise("attrib", ["+r", "+s", folderPath]);
+      // 4. Flush icon cache globally
+      await execFilePromise("ie4uinit.exe", ["-show"]);
+    } catch (e) {
+      // Folder may have been deleted/moved — ignore silently
+    }
+  };
+
+  // Immediate attempt (folder may not be selected yet)
+  doRefresh();
+
+  // Retry after 2 seconds (Explorer may still hold a selection lock)
+  setTimeout(() => doRefresh(), 2000);
+
+  // Final retry after 5 seconds (failsafe)
+  setTimeout(() => doRefresh(), 5000);
 }

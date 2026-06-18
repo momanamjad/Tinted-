@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, FolderOpen, PaintBucket, Zap, Shield, ArrowRight, Code2, Layers, Cpu, Sparkles } from 'lucide-react';
+import { Download, FolderOpen, PaintBucket, Zap, Shield, ArrowRight, Code2, Layers, Cpu, Sparkles, Copy, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const fadeUp = {
@@ -19,6 +19,17 @@ const staggerContainer = {
 
 function App() {
   const [latestVersion, setLatestVersion] = useState<string>('');
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText('powershell -command "Unblock-File -Path \'.\\Tintd Pro-Setup.exe\'"');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
 
   useEffect(() => {
     fetch('https://api.github.com/repos/momanamjad/Tinted-/releases/latest')
@@ -133,7 +144,13 @@ function App() {
                 <code className="text-[10px] text-gray-300 font-mono">
                   powershell -command "Unblock-File -Path '.\Tintd Pro-Setup.exe'"
                 </code>
-                <span className="text-[10px] text-gray-500 ml-2">(Optional bypass)</span>
+                <button 
+                  onClick={handleCopy}
+                  className="p-1.5 hover:bg-white/10 rounded-md transition-colors text-gray-400 hover:text-white"
+                  title="Copy command"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
           </motion.div>
