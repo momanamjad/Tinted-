@@ -25,7 +25,11 @@ export function registerIconHandlers(db: any) {
         throw new Error("The target path is not a valid directory.");
       }
 
-      // 2. Clean up previous .ico file to avoid bloating and cache reuse
+      // 2. Read database settings to check keepIconCopy preference
+      const settings = db.getSettings();
+      const keepIconCopy = settings.keepIconCopy;
+
+      // 3. Clean up previous .ico file to avoid bloating and cache reuse
       const existing = db.getFolderCustomization(folderPath);
       if (existing && existing.icoPath) {
         try {
@@ -35,13 +39,37 @@ export function registerIconHandlers(db: any) {
         }
       }
 
-      // 3. Generate a unique hash based on folder path and current timestamp
+      // 4. Generate a unique hash based on folder path and current timestamp
       const hashContent = `${folderPath}_${Date.now()}`;
       const hash = crypto.createHash("md5").update(hashContent).digest("hex");
 
-      // 4. Define target .ico path inside userData\icons\
-      const iconsDir = path.join(app.getPath("userData"), "icons");
-      const icoPath = path.join(iconsDir, `${hash}.ico`);
+      let icoPath = "";
+      let desktopIniContent = "";
+
+      if (keepIconCopy) {
+        // Save the .ico inside the folder itself in a hidden ".tintd-icons" folder
+        const localIconDir = path.join(folderPath, ".tintd-icons");
+        await fs.mkdir(localIconDir, { recursive: true });
+        icoPath = path.join(localIconDir, `folder-${hash}.ico`);
+
+        // Hide localIconDir
+        try {
+          const { execFile } = await import("node:child_process");
+          const { promisify } = await import("node:util");
+          await promisify(execFile)("attrib", ["+h", localIconDir]);
+        } catch (e) {}
+
+        // Use absolute path in desktop.ini to support virtual namespaces like Desktop
+        desktopIniContent = `\uFEFF[.ShellClassInfo]\r\nIconResource=${icoPath},0\r\nIconFile=${icoPath}\r\nIconIndex=0\r\n`;
+      } else {
+        // Save in AppData
+        const iconsDir = path.join(app.getPath("userData"), "icons");
+        await fs.mkdir(iconsDir, { recursive: true });
+        icoPath = path.join(iconsDir, `${hash}.ico`);
+
+        // Use absolute path in desktop.ini
+        desktopIniContent = `\uFEFF[.ShellClassInfo]\r\nIconResource=${icoPath},0\r\nIconFile=${icoPath}\r\nIconIndex=0\r\n`;
+      }
 
       // 5. Generate the .ico file
       await generateIcoFile(canvasImageData, 256, 256, icoPath);
@@ -56,7 +84,13 @@ export function registerIconHandlers(db: any) {
 
       // 6. Create desktop.ini in folder
       const desktopIniPath = path.join(folderPath, "desktop.ini");
-      await createDesktopIni(folderPath, icoPath);
+      try {
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        await promisify(execFile)("attrib", ["-h", "-s", desktopIniPath]);
+      } catch (e: any) {}
+
+      await fs.writeFile(desktopIniPath, desktopIniContent, "utf8");
       
       // Verify desktop.ini was created
       try {
@@ -73,7 +107,15 @@ export function registerIconHandlers(db: any) {
         // Could not set attributes — non-critical
       }
 
-      // 8. Folder kept as normal (Explorer requirement)
+      // 8. Explicitly apply Read-only and System attributes to the folder itself
+      // Windows Explorer REQUIRES a folder to be Read-only (+r) or System (+s) to read desktop.ini
+      try {
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        await promisify(execFile)("attrib", ["+r", "+s", folderPath]);
+      } catch (e: any) {
+        console.error("[ICON APPLY] ✗ Error setting folder attributes (+r +s):", e.message);
+      }
 
       // 9. Save customization to SQLite
       db.saveFolderCustomization({
@@ -87,6 +129,11 @@ export function registerIconHandlers(db: any) {
       // Silently notify Windows Shell to redraw the folder icon (handled in background with retries)
       refreshWindowsShell(folderPath).catch(() => {});
 
+      // Schedule a final refresh in exactly 60 seconds (60000ms) to guarantee that Explorer repaints
+      // after the OS cache has fully stabilized/rebuilt.
+      setTimeout(() => {
+        refreshWindowsShell(folderPath).catch(() => {});
+      }, 60000);
 
       return {
         success: true,
@@ -125,13 +172,25 @@ export function registerIconHandlers(db: any) {
         // Ignore if desktop.ini doesn't exist
       }
 
-      // 3. Folder system attribute no longer used
-      // (We don't set it during apply, so no need to unset it during removal)
+      // 3. Remove System/Read-only attributes from the folder itself
+      try {
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        await promisify(execFile)("attrib", ["-r", "-s", folderPath]);
+      } catch (e) {}
 
-      // 4. Clean up generated .ico file from AppData
+      // 4. Clean up generated .ico file
       if (customization && customization.icoPath) {
-        await fs.rm(customization.icoPath, { force: true });
+        try {
+          await fs.rm(customization.icoPath, { force: true });
+        } catch (e) {}
       }
+
+      // Clean up local .tintd-icons directory if it exists
+      const localIconDir = path.join(folderPath, ".tintd-icons");
+      try {
+        await fs.rm(localIconDir, { recursive: true, force: true });
+      } catch (e) {}
 
       // 5. Delete entry from SQLite
       db.removeFolderCustomization(folderPath);

@@ -11,6 +11,11 @@ import { registerIconHandlers } from "./handlers/iconHandlers.js";
 import fs from "node:fs/promises";
 import { FolderWatcher } from "./watchers/folderWatcher.js";
 import { registerWatcherHandlers } from "./handlers/watcherHandlers.js";
+import { refreshWindowsShell } from "./windowsIconManager.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFilePromise = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -272,6 +277,49 @@ app.whenReady().then(async () => {
     } catch (e) {
       log.error("Error cleaning up deleted folder customization:", e);
     }
+  });
+
+  // Run attrib on the new folder + its desktop.ini + parent directory,
+  // then trigger Explorer refresh — this runs for EVERY detected folder,
+  // regardless of whether an icon gets applied.
+  folderWatcher.setOnNewFolder(async (folderPath) => {
+    const parentDir = path.dirname(folderPath);
+    const desktopIniPath = path.join(folderPath, "desktop.ini");
+
+    // Helper that runs attrib on folder, desktop.ini, and parent, then triggers full refresh
+    const runAttribAndRefresh = async (pass: number) => {
+      log.info(`[WATCHER] attrib + refresh — pass ${pass} — folder: ${folderPath}`);
+
+      // attrib on the folder itself
+      try {
+        await execFilePromise("attrib", [folderPath]);
+        log.info(`[WATCHER] [pass ${pass}] attrib "${folderPath}" ✓`);
+      } catch (e: any) {
+        log.warn(`[WATCHER] [pass ${pass}] attrib folder failed: ${e.message}`);
+      }
+
+      // attrib on desktop.ini (may not exist on first pass — that's fine)
+      try {
+        await execFilePromise("attrib", [desktopIniPath]);
+        log.info(`[WATCHER] [pass ${pass}] attrib desktop.ini ✓`);
+      } catch (_) {}
+
+      // attrib on the PARENT directory — forces Explorer to refresh the containing view
+      try {
+        await execFilePromise("attrib", [parentDir]);
+        log.info(`[WATCHER] [pass ${pass}] attrib "${parentDir}" ✓`);
+      } catch (e: any) {
+        log.warn(`[WATCHER] [pass ${pass}] attrib parent failed: ${e.message}`);
+      }
+
+      // Full Explorer refresh (SHChangeNotify via PIDL + F5 + ie4uinit)
+      refreshWindowsShell(folderPath).catch((e) =>
+        log.error(`[WATCHER] [pass ${pass}] refreshWindowsShell failed:`, e)
+      );
+    };
+
+    // Pass 1 — run immediately
+    await runAttribAndRefresh(1);
   });
 
   // Set CSP via session headers (works correctly with file:// protocol)

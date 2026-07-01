@@ -1,10 +1,15 @@
 import { makeIco } from "./icon-generator.js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { execFile } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+import log from "electron-log";
 
+const execPromise = promisify(exec);
 const execFilePromise = promisify(execFile);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Generate an .ico file from raw RGBA pixel data and save it.
@@ -116,41 +121,85 @@ export async function unsetFolderSystem(folderPath: string): Promise<boolean> {
  * Icon is APPLIED immediately (saved to disk). It will DISPLAY when the folder
  * is deselected or after a few seconds. This is Windows Explorer's normal behavior.
  */
+let refreshTimeout: NodeJS.Timeout | null = null;
+const pathsToRefresh = new Set<string>();
+
 export async function refreshWindowsShell(folderPath?: string): Promise<void> {
-  if (!folderPath) {
-    // Global refresh only
-    try {
-      await execFilePromise("ie4uinit.exe", ["-show"]);
-    } catch (e) {
-      console.error("[REFRESH] ie4uinit failed:", e);
-    }
-    return;
+  if (folderPath) {
+    pathsToRefresh.add(folderPath);
   }
 
-  let attemptCount = 0;
+  if (refreshTimeout) {
+    clearTimeout(refreshTimeout);
+  }
 
-  const doRefresh = async () => {
-    attemptCount++;
-    try {
-      // 1. Briefly strip Read-only to create a change event Explorer will detect
-      await execFilePromise("attrib", ["-r", folderPath]);
-      // 2. Small delay so the OS registers the attribute change
-      await new Promise(r => setTimeout(r, 150));
-      // 3. Re-apply Read-only + System so Explorer re-reads desktop.ini
-      await execFilePromise("attrib", ["+r", "+s", folderPath]);
-      // 4. Flush icon cache globally
-      await execFilePromise("ie4uinit.exe", ["-show"]);
-    } catch (e) {
-      // Folder may have been deleted/moved — ignore silently
+  refreshTimeout = setTimeout(async () => {
+    refreshTimeout = null;
+    const paths = Array.from(pathsToRefresh);
+    pathsToRefresh.clear();
+
+    // 1. Force Windows to flush folder metadata by querying attrib on each folder
+    for (const p of paths) {
+      // Run attrib on the folder and its desktop.ini to force Windows OS to flush its icon cache
+      try {
+        log.info(`[REFRESH WINDOWS SHELL] Querying folder + desktop.ini attributes: ${p}`);
+        const iniPath = path.join(p, "desktop.ini");
+        await execPromise(`attrib "${p}" && attrib "${iniPath}"`);
+      } catch (attribErr: any) {
+        log.error(`[REFRESH WINDOWS SHELL] Attrib query failed for folder: ${p}:`, attribErr.message);
+      }
+
+      // Also run attrib on the PARENT directory so Explorer refreshes the containing folder
+      // (e.g. Desktop, Documents) — this is what makes the icon change visible immediately
+      try {
+        const parentDir = path.dirname(p);
+        log.info(`[REFRESH WINDOWS SHELL] Querying parent directory attributes: ${parentDir}`);
+        await execPromise(`attrib "${parentDir}"`);
+      } catch (parentErr: any) {
+        log.error(`[REFRESH WINDOWS SHELL] Attrib query failed for parent dir:`, parentErr.message);
+      }
     }
-  };
 
-  // Immediate attempt (folder may not be selected yet)
-  doRefresh();
+    const runPS1 = async (p: string) => {
+      const scriptPath = path.join(__dirname, "refresh-icon.ps1");
+      const { stdout, stderr } = await execPromise(
+        `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}" -FolderPath "${p}"`
+      );
+      if (stdout.trim()) log.info(`[REFRESH WINDOWS SHELL] PS stdout: ${stdout.trim()}`);
+      if (stderr?.trim()) log.error(`[REFRESH WINDOWS SHELL] PS stderr: ${stderr.trim()}`);
+    };
 
-  // Retry after 2 seconds (Explorer may still hold a selection lock)
-  setTimeout(() => doRefresh(), 2000);
+    // 2. Fire PS1 (SHChangeNotify) immediately
+    for (const p of paths) {
+      try {
+        log.info(`[REFRESH WINDOWS SHELL] Running PS1 refresh for: ${p}`);
+        await runPS1(p);
+      } catch (err: any) {
+        log.error("[REFRESH WINDOWS SHELL] PS1 failed:", err);
+      }
+    }
 
-  // Final retry after 5 seconds (failsafe)
-  setTimeout(() => doRefresh(), 5000);
+    // 3. Trigger ie4uinit in the background (non-blocking) to update cache
+    execFilePromise("ie4uinit.exe", ["-show"]).catch((e: any) => {
+      log.warn("[REFRESH WINDOWS SHELL] ie4uinit failed (non-critical):", e.message);
+    });
+
+
+    // If no specific path was given, still run the script for a global refresh
+    if (paths.length === 0) {
+      try {
+        const scriptPath = path.join(__dirname, "refresh-icon.ps1");
+        log.info("[REFRESH WINDOWS SHELL] Spawning PowerShell (global refresh, no specific path)");
+        const { stdout, stderr } = await execPromise(
+          `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`
+        );
+        log.info(`[REFRESH WINDOWS SHELL] PS stdout: ${stdout.trim()}`);
+        if (stderr && stderr.trim()) {
+          log.error(`[REFRESH WINDOWS SHELL] PS stderr: ${stderr.trim()}`);
+        }
+      } catch (err: any) {
+        log.error("[REFRESH WINDOWS SHELL] PS script (global) failed:", err);
+      }
+    }
+  }, 800);
 }

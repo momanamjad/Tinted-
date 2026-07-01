@@ -8,8 +8,8 @@
   "type": "module",
   "scripts": {
     "compile-electron": "tsc -p electron/tsconfig.json",
-    "dev": "npm run compile-electron && concurrently -k \"vite\" \"tsc -p electron/tsconfig.json --watch --preserveWatchOutput\" \"wait-on tcp:5173 && electron .\"",
-    "build": "tsc --noEmit && vite build && tsc -p electron/tsconfig.json",
+    "dev": "npm run compile-electron && copy electron\\refresh-icon.ps1 dist-electron\\refresh-icon.ps1 && concurrently -k \"vite\" \"tsc -p electron/tsconfig.json --watch --preserveWatchOutput\" \"wait-on tcp:5173 && electron .\"",
+    "build": "tsc --noEmit && vite build && tsc -p electron/tsconfig.json && copy electron\\refresh-icon.ps1 dist-electron\\refresh-icon.ps1",
     "dist": "npm run build && electron-builder --win nsis",
     "publish": "npm run build && electron-builder --win nsis -p always",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",

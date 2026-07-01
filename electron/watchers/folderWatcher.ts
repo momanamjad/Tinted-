@@ -9,6 +9,7 @@ export class FolderWatcher {
   private autoStyleDelay: number = 3000;
   private processingFolders = new Set<string>();
   private onDeletedCallback: ((dirPath: string) => Promise<void> | void) | null = null;
+  private onNewFolderCallback: ((folderPath: string) => Promise<void> | void) | null = null;
 
   constructor(mainWindow: BrowserWindow | null = null) {
     this.mainWindow = mainWindow;
@@ -16,6 +17,10 @@ export class FolderWatcher {
 
   setOnFolderDeleted(callback: (dirPath: string) => Promise<void> | void): void {
     this.onDeletedCallback = callback;
+  }
+
+  setOnNewFolder(callback: (folderPath: string) => Promise<void> | void): void {
+    this.onNewFolderCallback = callback;
   }
 
   setMainWindow(mainWindow: BrowserWindow) {
@@ -189,8 +194,18 @@ export class FolderWatcher {
       }
 
       let stableCount = 0;
+      // Hard cap: never wait more than autoStyleDelay * 3 (min 6s, max 15s)
+      // Without this, any write inside the folder (desktop.ini, attrib, .tintd-icons)
+      // resets stableCount to 0 and the loop can run for MINUTES.
+      const maxWaitMs = Math.min(15000, Math.max(6000, this.autoStyleDelay * 3));
+      const startTime = Date.now();
 
       while (stableCount < targetStableCount) {
+        // Break out if we've been waiting too long regardless of stability
+        if (Date.now() - startTime >= maxWaitMs) {
+          break;
+        }
+
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         if (!fs.existsSync(folderPath)) {
@@ -211,12 +226,22 @@ export class FolderWatcher {
         }
       }
 
+
       const currentFolderName = path.basename(folderPath);
       if (this.isSkippableFolder(folderPath, currentFolderName)) {
         return;
       }
 
 
+
+      // Fire the new-folder callback (used by main.ts to run attrib + refresh on parent directory)
+      if (this.onNewFolderCallback) {
+        try {
+          await this.onNewFolderCallback(folderPath);
+        } catch (err) {
+          console.error("[WATCHER] onNewFolderCallback error:", err);
+        }
+      }
 
       // Send message to renderer
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {

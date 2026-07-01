@@ -40,7 +40,13 @@ export function MainContent() {
     reason: string;
     confidence: number;
   } | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "error"; iconId?: string } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "info" | "error";
+    iconId?: string;
+    countdown?: number;
+    folderName?: string;
+  } | null>(null);
   const [isBgStyling, setIsBgStyling] = useState(false);
 
   // Parent Workspace Navigation States
@@ -58,6 +64,39 @@ export function MainContent() {
       triggerRefresh
     };
   }, [settings]);
+
+  // Tick-down timer for directory icon refreshes
+  useEffect(() => {
+    if (!toast || toast.countdown === undefined) return;
+    if (toast.countdown <= 0) {
+      // Reached 0 — update to final success message
+      const finalMsg = `✓ Directory updated for ${toast.folderName || "folder"}!`;
+      setToast({
+        message: finalMsg,
+        type: "success",
+        iconId: toast.iconId
+      });
+      // Auto-hide after 3 seconds
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+
+    const interval = setInterval(() => {
+      setToast((prev) => {
+        if (!prev || prev.countdown === undefined) return prev;
+        const nextCount = prev.countdown - 1;
+        return {
+          ...prev,
+          countdown: nextCount,
+          message: `✓ ${prev.folderName || "Folder"} styled! Directory icon will update in ${nextCount}s...`
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [toast?.countdown]);
 
   // Sync subdirectories list when history or operations occur
   useEffect(() => {
@@ -240,26 +279,21 @@ export function MainContent() {
               });
 
               currentSetToast({
-                message: `✓ ${folderName} styled!`,
+                message: `✓ ${folderName} styled! Directory icon will update in 60s...`,
                 type: "success",
-                iconId: targetIconId
+                iconId: targetIconId,
+                countdown: 60,
+                folderName: folderName
               });
-              setTimeout(() => currentSetToast(null), 5000);
 
               if (Notification.permission === "granted") {
                 new Notification("Folder Auto-Styled", {
-                  body: `✓ ${folderName} auto-styled!`,
+                  body: `✓ ${folderName} styled in-app. Directory will update in 1 minute.`,
                 });
               }
 
               currentTriggerRefresh();
 
-              // Restart Explorer to refresh Desktop
-              try {
-                await window.tintd.ipcRenderer.invoke("restartExplorer");
-              } catch (e: any) {
-                console.error("[RENDERER] Error restarting explorer:", e.message);
-              }
             } else {
               await window.tintd.ipcRenderer.invoke("watcher:log-activity", {
                 folderPath,
@@ -322,12 +356,14 @@ export function MainContent() {
       if (result.success) {
         await updateSetting("lastColor", selectedColor as AppSettings["lastColor"]);
         triggerRefresh();
+        const folderName = selectedFolderPath.split("\\").pop() || "folder";
         setToast({
-          message: `Successfully applied icon to ${selectedFolderPath.split("\\").pop() || "folder"}!`,
+          message: `✓ ${folderName} styled! Directory icon will update in 60s...`,
           type: "success",
-          iconId: selectedIconId
+          iconId: selectedIconId,
+          countdown: 60,
+          folderName: folderName
         });
-        setTimeout(() => setToast(null), 4000);
       } else {
         setToast({
           message: `Error applying icon: ${result.error}`,
