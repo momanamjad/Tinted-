@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell, type OpenDialogOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session, shell, Tray, Menu, type OpenDialogOptions } from "electron";
 import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +23,8 @@ const __dirname = path.dirname(__filename);
 let mainWindow: BrowserWindow | null = null;
 let db: AppDatabase;
 let folderWatcher: FolderWatcher;
+let tray: Tray | null = null;
+let isQuiting = false;
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -43,9 +45,18 @@ async function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+    if (!process.argv.includes('--hidden')) {
+      mainWindow?.show();
+    }
     if (mainWindow) {
       folderWatcher.setMainWindow(mainWindow);
+    }
+  });
+
+  mainWindow.on("close", (event) => {
+    if (!isQuiting) {
+      event.preventDefault();
+      mainWindow?.hide();
     }
   });
 
@@ -231,6 +242,23 @@ function registerIpc() {
 
 app.whenReady().then(async () => {
   log.initialize();
+
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    args: ['--hidden']
+  });
+
+  tray = new Tray(path.join(__dirname, "../build/icon.ico"));
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Open Tintd Pro', click: () => mainWindow?.show() },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { isQuiting = true; app.quit(); } }
+  ]);
+  tray.setToolTip('Tintd Pro');
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    mainWindow?.show();
+  });
   
   const defaultWatchPaths: string[] = [];
   try {
@@ -377,7 +405,5 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  // Do nothing, we want the app to stay open in the background
 });
