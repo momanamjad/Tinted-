@@ -121,6 +121,49 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle("folders:scan-history", async (_event, scanPath: string) => {
+    try {
+      const scanDirectory = async (dir: string, depth = 0) => {
+        if (depth > 2) return; // limit depth to avoid huge scans
+        try {
+          const entries = await fs.readdir(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory()) {
+              const fullPath = path.join(dir, entry.name);
+              const iniPath = path.join(fullPath, "desktop.ini");
+              try {
+                const iniContent = await fs.readFile(iniPath, "utf8");
+                if (iniContent.includes("IconResource") && iniContent.includes("tintd-icons")) {
+                  // Reconstruct DB entry
+                  const icoMatch = iniContent.match(/IconResource=([^,]+)/);
+                  if (icoMatch) {
+                    const icoPath = icoMatch[1];
+                    db.saveFolderCustomization({
+                      folderPath: fullPath,
+                      icoPath: icoPath,
+                      selectedIcon: "folder", // default fallback
+                      selectedColor: "#22c55e", // default fallback
+                      appliedDate: new Date().toISOString()
+                    });
+                  }
+                }
+              } catch (e) {}
+              
+              if (depth < 2 && !entry.name.startsWith(".")) {
+                 await scanDirectory(fullPath, depth + 1);
+              }
+            }
+          }
+        } catch (e) {}
+      };
+
+      await scanDirectory(scanPath);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle("icons:history", () => {
     const list = db.getCustomizationHistory();
     return list.map((item: any) => ({

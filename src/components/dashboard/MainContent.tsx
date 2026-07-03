@@ -358,12 +358,12 @@ export function MainContent() {
         triggerRefresh();
         const folderName = selectedFolderPath.split("\\").pop() || "folder";
         setToast({
-          message: `✓ ${folderName} styled! Directory icon will update in 60s...`,
+          message: `✓ ${folderName} styled successfully!`,
           type: "success",
           iconId: selectedIconId,
-          countdown: 60,
           folderName: folderName
         });
+        setTimeout(() => setToast(null), 3000);
       } else {
         setToast({
           message: `Error applying icon: ${result.error}`,
