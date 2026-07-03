@@ -206,6 +206,26 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
     }
   };
 
+  const handleScanHistory = async () => {
+    if (!window.tintd?.ipcRenderer) return;
+    const selectedPath = await window.tintd.ipcRenderer.invoke("watcher:select-directory");
+    if (!selectedPath) return;
+
+    if (window.confirm("Scan this directory for previously styled folders and add them to history? This may take a moment.")) {
+      try {
+        const result = await window.tintd.ipcRenderer.invoke("folders:scan-history", selectedPath);
+        if (result.success) {
+          window.alert("Scan complete! History has been updated.");
+          window.location.reload();
+        } else {
+          window.alert("Scan failed: " + result.error);
+        }
+      } catch (err) {
+        console.error("Scan error:", err);
+      }
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-5 overflow-auto pb-4">
       {/* Section: Appearance */}
@@ -483,6 +503,16 @@ export function SettingsTab({ settings, onUpdateSetting }: SettingsTabProps) {
             >
               <Upload className="h-3.5 w-3.5" />
               Import Settings
+            </Button>
+            <Button
+              id="settings-scan-history"
+              variant="outline"
+              size="sm"
+              onClick={handleScanHistory}
+              className="gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <FolderSearch className="h-3.5 w-3.5" />
+              Scan for Colors
             </Button>
           </div>
         </CardContent>
